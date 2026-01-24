@@ -1,0 +1,514 @@
+# 收购物品配置
+# 物品ID必须是标准的 Bukkit Material 名称 (全大写)
+# 参考: https://hub.spigotmc.org/javadocs/spigot/org/bukkit/Material.html
+# ==========================================
+#        DailySellShop 完整配置文件 (1.21)
+# ==========================================
+
+timezone: "Asia/Shanghai"
+
+daily-rotation:
+  enabled: true    # 是否开启随机 true = 从 'items' 里随机选 N 个; false = 显示 'static-items' 里的全部
+  amount: 5       # 每天只从下面的列表中选出n个进行收购，仅在 enabled 为 true 时生效
+
+messages:
+  prefix: "&8[&a收购商&8] "
+  sold: "&a成功出售 %amount% 个 %item%，获得 $%money%！(今日剩余: %limit%)"
+  no-item: "&c你背包里没有足够的物品！"
+  limit-reached: "&c该物品今日出售额度已用完！"
+  config-reloaded: "&a配置已重载。"
+
+# ==========================================
+#             收购物品列表
+# 格式:
+# 材质名(全大写):
+#   price: 单价
+#   daily-limit: 每日每人最大出售数量
+#   name: 显示名称 (支持 & 颜色代码)
+# ==========================================
+
+# ==========================================
+# [模式 A] 固定商店配置
+# 当 daily-rotation.enabled: false 时使用此列表
+# ==========================================
+static-items:
+  COBBLESTONE:
+    price: 0.01
+    daily-limit: 5000
+    name: "&7圆石"
+  DIRT:
+    price: 0.01
+    daily-limit: 5000
+    name: "&6泥土"
+  IRON_INGOT:
+    price: 0.25
+    daily-limit: 256
+    name: "&f铁锭"
+  # 在这里配置你希望永久显示的物品
+
+
+# ==========================================
+# [模式 B] 随机池配置
+# 当 daily-rotation.enabled: true 时使用此列表
+# ==========================================
+items:
+  # ================= 珍贵矿物 =================
+  DIAMOND:
+    price: 1
+    daily-limit: 64
+    name: "&b钻石"
+  NETHERITE_INGOT:
+    price: 10
+    daily-limit: 5
+    name: "&4下界合金锭"
+  NETHERITE_SCRAP:
+    price: 2.5
+    daily-limit: 30
+    name: "&4下界合金碎片"
+  EMERALD:
+    price: 1
+    daily-limit: 50
+    name: "&a绿宝石"
+  GOLD_INGOT:
+    price: 0.3
+    daily-limit: 200
+    name: "&6金锭"
+  RAW_GOLD:
+    price: 0.26
+    daily-limit: 200
+    name: "&6粗金"
+  IRON_INGOT:
+    price: 0.25
+    daily-limit: 256
+    name: "&f铁锭"
+  RAW_IRON:
+    price: 0.2
+    daily-limit: 250
+    name: "&f粗铁"
+  COPPER_INGOT:
+    price: 0.1
+    daily-limit: 250
+    name: "&c铜锭"
+  RAW_COPPER:
+    price: 0.08
+    daily-limit: 500
+    name: "&c粗铜"
+  LAPIS_LAZULI:
+    price: 0.15
+    daily-limit: 320
+    name: "&9青金石"
+  REDSTONE:
+    price: 0.1
+    daily-limit: 500
+    name: "&c红石"
+  COAL:
+    price: 0.05
+    daily-limit: 1000
+    name: "&8煤炭"
+  CHARCOAL:
+    price: 0.05
+    daily-limit: 1000
+    name: "&8木炭"
+  QUARTZ:
+    price: 0.5
+    daily-limit: 128
+    name: "&f下界石英"
+  AMETHYST_SHARD:
+    price: 0.16
+    daily-limit: 250
+    name: "&d紫水晶碎片"
+  ECHO_SHARD:
+    price: 1
+    daily-limit: 40
+    name: "&3回响碎片"
+
+  # ================= 1.21 新物品 =================
+  BREEZE_ROD:
+    price: 0.3
+    daily-limit: 250
+    name: "&b旋风棒"
+  HEAVY_CORE:
+    price: 80
+    daily-limit: 1
+    name: "&5沉重核心"
+  WIND_CHARGE:
+    price: 0.1
+    daily-limit: 500
+    name: "&f风弹"
+  TRIAL_KEY:
+    price: 1
+    daily-limit: 128
+    name: "&6试炼钥匙"
+  OMINOUS_TRIAL_KEY:
+    price: 2
+    daily-limit: 20
+    name: "&4不祥试炼钥匙"
+  COPPER_BULB:
+    price: 0.2
+    daily-limit: 64
+    name: "&6铜灯"
+  CRAFTER:
+    price: 1
+    daily-limit: 50
+    name: "&c合成器"
+
+  # ================= 怪物掉落物 =================
+  ROTTEN_FLESH:
+    price: 0.02
+    daily-limit: 3000
+    name: "&7腐肉"
+  BONE:
+    price: 0.04
+    daily-limit: 1500
+    name: "&f骨头"
+  STRING:
+    price: 0.05
+    daily-limit: 1000
+    name: "&f线"
+  SPIDER_EYE:
+    price: 0.04
+    daily-limit: 1000
+    name: "&4蜘蛛眼"
+  GUNPOWDER:
+    price: 0.1
+    daily-limit: 500
+    name: "&7火药"
+  ENDER_PEARL:
+    price: 0.05
+    daily-limit: 5000
+    name: "&3末影珍珠"
+  BLAZE_ROD:
+    price: 0.2
+    daily-limit: 250
+    name: "&6烈焰棒"
+  GHAST_TEAR:
+    price: 1
+    daily-limit: 50
+    name: "&f恶魂之泪"
+  MAGMA_CREAM:
+    price: 0.16
+    daily-limit: 250
+    name: "&6岩浆膏"
+  SLIME_BALL:
+    price: 0.1
+    daily-limit: 500
+    name: "&a粘液球"
+  PHANTOM_MEMBRANE:
+    price: 0.3
+    daily-limit: 130
+    name: "&7幻翼膜"
+  SHULKER_SHELL:
+    price: 0.1
+    daily-limit: 500
+    name: "&d潜影壳"
+  LEATHER:
+    price: 0.1
+    daily-limit: 500
+    name: "&6皮革"
+  RABBIT_HIDE:
+    price: 0.06
+    daily-limit: 1000
+    name: "&6兔子皮"
+  INK_SAC:
+    price: 0.06
+    daily-limit: 1000
+    name: "&0墨囊"
+  GLOW_INK_SAC:
+    price: 0.1
+    daily-limit: 500
+    name: "&b发光墨囊"
+  SCUTE:
+    price: 0.4
+    daily-limit: 130
+    name: "&a鳞甲"
+  ARMADILLO_SCUTE:
+    price: 0.3
+    daily-limit: 250
+    name: "&6犰狳鳞甲"
+  PRISMARINE_SHARD:
+    price: 0.1
+    daily-limit: 500
+    name: "&3海晶碎片"
+  PRISMARINE_CRYSTALS:
+    price: 0.16
+    daily-limit: 300
+    name: "&b海晶砂粒"
+  NAUTILUS_SHELL:
+    price: 0.6
+    daily-limit: 100
+    name: "&3鹦鹉螺壳"
+  NETHER_STAR:
+    price: 10
+    daily-limit: 5
+    name: "&f下界之星"
+  TOTEM_OF_UNDYING:
+    price: 5
+    daily-limit: 10
+    name: "&e不死图腾"
+
+  # ================= 农作物与植物 =================
+  WHEAT:
+    price: 0.06
+    daily-limit: 1000
+    name: "&e小麦"
+  CARROT:
+    price: 0.05
+    daily-limit: 1000
+    name: "&6胡萝卜"
+  POTATO:
+    price: 0.05
+    daily-limit: 1000
+    name: "&e马铃薯"
+  BEETROOT:
+    price: 0.05
+    daily-limit: 1000
+    name: "&4甜菜根"
+  MELON_SLICE:
+    price: 0.02
+    daily-limit: 2000
+    name: "&a西瓜片"
+  PUMPKIN:
+    price: 0.08
+    daily-limit: 600
+    name: "&6南瓜"
+  SUGAR_CANE:
+    price: 0.06
+    daily-limit: 800
+    name: "&a甘蔗"
+  KELP:
+    price: 0.01
+    daily-limit: 5000
+    name: "&2海带"
+  BAMBOO:
+    price: 0.02
+    daily-limit: 3000
+    name: "&a竹子"
+  CACTUS:
+    price: 0.06
+    daily-limit: 1000
+    name: "&2仙人掌"
+  COCOA_BEANS:
+    price: 0.06
+    daily-limit: 800
+    name: "&6可可豆"
+  SWEET_BERRIES:
+    price: 0.04
+    daily-limit: 1500
+    name: "&c甜浆果"
+  GLOW_BERRIES:
+    price: 0.06
+    daily-limit: 800
+    name: "&6发光浆果"
+  NETHER_WART:
+    price: 0.08
+    daily-limit: 500
+    name: "&4地狱疣"
+  CHORUS_FRUIT:
+    price: 0.1
+    daily-limit: 500
+    name: "&d紫颂果"
+  APPLE:
+    price: 0.2
+    daily-limit: 250
+    name: "&c苹果"
+
+  # ================= 原木 (所有种类) =================
+  OAK_LOG:
+    price: 0.08
+    daily-limit: 800
+    name: "&6橡木原木"
+  SPRUCE_LOG:
+    price: 0.08
+    daily-limit: 800
+    name: "&6云杉原木"
+  BIRCH_LOG:
+    price: 0.08
+    daily-limit: 800
+    name: "&6白桦原木"
+  JUNGLE_LOG:
+    price: 0.08
+    daily-limit: 800
+    name: "&6丛林原木"
+  ACACIA_LOG:
+    price: 0.08
+    daily-limit: 800
+    name: "&6金合欢原木"
+  DARK_OAK_LOG:
+    price: 0.08
+    daily-limit: 800
+    name: "&6深色橡木原木"
+  MANGROVE_LOG:
+    price: 0.08
+    daily-limit: 800
+    name: "&4红树林原木"
+  CHERRY_LOG:
+    price: 0.08
+    daily-limit: 800
+    name: "&d樱花原木"
+  CRIMSON_STEM:
+    price: 0.08
+    daily-limit: 800
+    name: "&4绯红菌柄"
+  WARPED_STEM:
+    price: 0.08
+    daily-limit: 800
+    name: "&3诡异菌柄"
+
+  # ================= 基础建材与自然 =================
+  COBBLESTONE:
+    price: 0.01
+    daily-limit: 5000
+    name: "&7圆石"
+  STONE:
+    price: 0.01
+    daily-limit: 5000
+    name: "&7石头"
+  ANDESITE:
+    price: 0.02
+    daily-limit: 2500
+    name: "&7安山岩"
+  DIORITE:
+    price: 0.02
+    daily-limit: 2500
+    name: "&f闪长岩"
+  GRANITE:
+    price: 0.02
+    daily-limit: 2500
+    name: "&6花岗岩"
+  DEEPSLATE:
+    price: 0.02
+    daily-limit: 2500
+    name: "&8深板岩"
+  COBBLED_DEEPSLATE:
+    price: 0.01
+    daily-limit: 5000
+    name: "&8深板岩圆石"
+  TUFF:
+    price: 0.02
+    daily-limit: 2500
+    name: "&7凝灰岩"
+  DIRT:
+    price: 0.01
+    daily-limit: 5000
+    name: "&6泥土"
+  SAND:
+    price: 0.01
+    daily-limit: 5000
+    name: "&e沙子"
+  RED_SAND:
+    price: 0.02
+    daily-limit: 2500
+    name: "&c红沙"
+  GRAVEL:
+    price: 0.02
+    daily-limit: 2500
+    name: "&7沙砾"
+  CLAY_BALL:
+    price: 0.01
+    daily-limit: 5000
+    name: "&7粘土球"
+  OBSIDIAN:
+    price: 0.05
+    daily-limit: 1000
+    name: "&5黑曜石"
+  CRYING_OBSIDIAN:
+    price: 0.05
+    daily-limit: 1000
+    name: "&5哭泣的黑曜石"
+  NETHERRACK:
+    price: 0.01
+    daily-limit: 5000
+    name: "&4下界岩"
+  END_STONE:
+    price: 0.01
+    daily-limit: 5000
+    name: "&e末地石"
+  BASALT:
+    price: 0.01
+    daily-limit: 5000
+    name: "&8玄武岩"
+  BLACKSTONE:
+    price: 0.01
+    daily-limit: 5000
+    name: "&8黑石"
+  CALCITE:
+    price: 0.03
+    daily-limit: 1500
+    name: "&f方解石"
+
+  # ================= 彩色方块 (举例: 羊毛) =================
+  # 为了不占满篇幅，这里列出羊毛，建议按需添加混凝土(CONCRETE)和玻璃(STAINED_GLASS)
+  WHITE_WOOL:
+    price: 0.2
+    daily-limit: 300
+    name: "&f白色羊毛"
+  BLACK_WOOL:
+    price: 0.2
+    daily-limit: 300
+    name: "&0黑色羊毛"
+  RED_WOOL:
+    price: 0.2
+    daily-limit: 300
+    name: "&c红色羊毛"
+  BLUE_WOOL:
+    price: 0.2
+    daily-limit: 300
+    name: "&9蓝色羊毛"
+  GREEN_WOOL:
+    price: 0.2
+    daily-limit: 300
+    name: "&2绿色羊毛"
+  YELLOW_WOOL:
+    price: 0.2
+    daily-limit: 300
+    name: "&e黄色羊毛"
+
+  # ================= 杂项与功能 =================
+  HONEYCOMB:
+    price: 0.1
+    daily-limit: 500
+    name: "&6蜜脾"
+  HONEY_BOTTLE:
+    price: 0.1
+    daily-limit: 500
+    name: "&6蜂蜜瓶"
+  SNOWBALL:
+    price: 0.01
+    daily-limit: 5000
+    name: "&f雪球"
+  ICE:
+    price: 0.1
+    daily-limit: 500
+    name: "&b冰"
+  PACKED_ICE:
+    price: 0.2
+    daily-limit: 250
+    name: "&b浮冰"
+  BLUE_ICE:
+    price: 0.2
+    daily-limit: 250
+    name: "&b蓝冰"
+  SCULK:
+    price: 0.1
+    daily-limit: 500
+    name: "&3幽匿块"
+  SCULK_CATALYST:
+    price: 0.5
+    daily-limit: 128
+    name: "&3幽匿催发体"
+  MUD:
+    price: 0.01
+    daily-limit: 5000
+    name: "&8泥巴"
+  MOSS_BLOCK:
+    price: 0.02
+    daily-limit: 2500
+    name: "&a苔藓块"
+  NAME_TAG:
+    price: 0.3
+    daily-limit: 150
+    name: "&e命名牌"
+  SADDLE:
+    price: 0.5
+    daily-limit: 100
+    name: "&6鞍"

@@ -1,0 +1,16 @@
+name: DailySellShop
+version: 1.0
+main: com.dailyshop.DailySellShop
+api-version: 1.21
+depend: [Vault]
+softdepend: [floodgate]
+authors: [YourName]
+commands:
+  ds:
+    description: 打开每日收购界面
+    usage: /ds [reload]
+permissions:
+  dailysell.admin:
+    description: 允许重载配置
+    default: op
+
