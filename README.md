@@ -54,19 +54,20 @@ daily-rotation:
   enabled: true     # [true]=开启每日随机抽取; [false]=显示下方 static-items 固定列表
   amount: 18        # 仅在随机模式下生效：每天抽取多少个物品
 
-# [模式 A] 随机池配置 (当 enabled: true 时读取这里)
-items:
-  DIAMOND:
-    price: 100.0
-    daily-limit: 64
-    name: "&b钻石"
-
-# [模式 B] 固定列表配置 (当 enabled: false 时读取这里)
+# [模式 A] 固定列表配置 (当 enabled: false 时读取这里)
 static-items:
   COBBLESTONE:
     price: 0.5
     daily-limit: 1000
     name: "&7圆石"
+
+
+# [模式 B] 随机池配置 (当 enabled: true 时读取这里)
+items:
+  DIAMOND:
+    price: 100.0
+    daily-limit: 64
+    name: "&b钻石"
 
 ```
 
