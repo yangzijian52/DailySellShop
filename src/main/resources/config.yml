@@ -7,16 +7,37 @@
 
 timezone: "Asia/Shanghai"
 
-daily-rotation:
-  enabled: true    # 是否开启随机 true = 从 'items' 里随机选 N 个; false = 显示 'static-items' 里的全部
-  amount: 5       # 每天只从下面的列表中选出n个进行收购，仅在 enabled 为 true 时生效
+# ==========================================
+#           刷新模式设置 (核心设置)
+# ==========================================
+# 模式选择:
+#   DAILY  = 每日刷新 (北京时间 00:00)，限额为 100%
+#   HOURLY = 每小时刷新 (北京时间整点)，限额为下方设定的倍率
+refresh-mode: "HOURLY"
 
+# 随机抽取设置
+random-rotation:
+  enabled: true     # 是否随机抽取物品 (false则显示所有static-items)
+  amount: 5        # 每次刷新抽取多少个物品
+
+# 仅在 refresh-mode 为 HOURLY 时生效
+hourly-settings:
+  multiplier: 0.5   # 0.5 表示每小时刷新时，玩家的限额是原本的 50%
+
+
+# ==========================================
+#               语言与消息
+# ==========================================
 messages:
   prefix: "&8[&a收购商&8] "
-  sold: "&a成功出售 %amount% 个 %item%，获得 $%money%！(今日剩余: %limit%)"
+  # 商店标题 (对应不同模式)
+  title-daily: "&0每日收购 (0点刷新)"
+  title-hourly: "&0限时收购 (整点刷新)"
+
+  sold: "&a成功出售 %amount% 个 %item%，获得 $%money%！(本轮剩余: %limit%)"
   no-item: "&c你背包里没有足够的物品！"
-  limit-reached: "&c该物品今日出售额度已用完！"
-  config-reloaded: "&a配置已重载。"
+  limit-reached: "&c该物品本轮出售额度已用完！"
+  config-reloaded: "&a配置已重载，当前模式: %mode%"
 
 # ==========================================
 #             收购物品列表

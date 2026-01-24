@@ -15,7 +15,6 @@ import java.util.List;
 public class ShopGui {
 
     public static void open(Player player) {
-        // 检查是否安装了 Floodgate 并且玩家是基岩版玩家
         boolean isBedrock = false;
         if (Bukkit.getPluginManager().isPluginEnabled("floodgate")) {
             try {
@@ -30,16 +29,16 @@ public class ShopGui {
         }
     }
 
-    // --- Java版：箱子界面 ---
     private static void openJavaInventory(Player player) {
         ShopManager manager = DailySellShop.getInstance().getShopManager();
         List<String> items = manager.getActiveItems();
 
-        // 自动计算箱子行数
         int rows = (int) Math.ceil(items.size() / 9.0);
-        rows = Math.max(1, Math.min(6, rows)); // 1到6行
+        rows = Math.max(1, Math.min(6, rows));
 
-        Inventory inv = Bukkit.createInventory(null, rows * 9, "§0今日收购 (北京时间刷新)");
+        String title = manager.getShopTitle();
+
+        Inventory inv = Bukkit.createInventory(null, rows * 9, title);
 
         for (String key : items) {
             Material mat = Material.getMaterial(key);
@@ -55,11 +54,10 @@ public class ShopGui {
 
             List<String> lore = new ArrayList<>();
             lore.add("§7单价: §a$" + price);
-            lore.add("§7今日进度: §e" + sold + " / " + limit);
+            lore.add("§7当前进度: §e" + sold + " / " + limit);
             lore.add("");
-
             if (sold >= limit) {
-                lore.add("§c今日额度已满");
+                lore.add("§c本轮额度已满");
             } else {
                 lore.add("§e点击出售背包内该物品");
             }
@@ -71,15 +69,15 @@ public class ShopGui {
         player.openInventory(inv);
     }
 
-    // --- 基岩版：Form表单 ---
     private static void openBedrockForm(Player player) {
         ShopManager manager = DailySellShop.getInstance().getShopManager();
 
-        SimpleForm.Builder builder = SimpleForm.builder()
-                .title("收购商店")
-                .content("北京时间每日0点刷新随机收购列表");
+        String title = manager.getShopTitle();
+        String cleanTitle = title.replaceAll("§.", "");
 
-        // 这里的列表用于记录按钮ID对应的物品Key
+        SimpleForm.Builder builder = SimpleForm.builder()
+                .title(cleanTitle);
+
         List<String> buttonKeyMapping = new ArrayList<>();
 
         for (String key : manager.getActiveItems()) {
@@ -88,10 +86,7 @@ public class ShopGui {
             double price = manager.getPrice(key);
             String name = manager.getDisplayName(key);
 
-            // 按钮文字：显示名称、价格和进度
-            // 例如: 钻石 [$100] (0/64)
             String buttonText = name + "\n§r§8[$" + price + "] " + sold + "/" + limit;
-
             builder.button(buttonText);
             buttonKeyMapping.add(key);
         }
@@ -100,12 +95,8 @@ public class ShopGui {
             int index = response.clickedButtonId();
             if (index >= 0 && index < buttonKeyMapping.size()) {
                 String key = buttonKeyMapping.get(index);
-
-                // 执行出售逻辑
                 ShopListener.executeSell(player, key);
-
-                // 交易完成后重新打开界面，刷新数据
-                openBedrockForm(player);
+                openBedrockForm(player); // 重新打开刷新数据
             }
         });
 

@@ -16,17 +16,24 @@ public class ShopCommand implements CommandExecutor {
         }
 
         Player player = (Player) sender;
+        DailySellShop plugin = DailySellShop.getInstance();
 
         if (args.length > 0 && args[0].equalsIgnoreCase("reload")) {
             if (player.hasPermission("dailysell.admin")) {
-                DailySellShop.getInstance().reloadConfig();
-                DailySellShop.getInstance().getShopManager().rotateDailyItems(); // 重新加载随机池
-                player.sendMessage("§a配置已重载，物品池已刷新。");
+                plugin.reloadConfig();
+
+                // 核心修改：调用 forceUpdate 重新读取模式和倍率
+                plugin.getShopManager().forceUpdate();
+
+                String mode = plugin.getConfig().getString("refresh-mode");
+                String msg = plugin.getConfig().getString("messages.config-reloaded")
+                        .replace("&", "§")
+                        .replace("%mode%", mode);
+                player.sendMessage(msg);
                 return true;
             }
         }
 
-        // 打开菜单
         ShopGui.open(player);
         return true;
     }
