@@ -6,7 +6,7 @@
 
     <groupId>com.dailyshop</groupId>
     <artifactId>DailySellShop</artifactId>
-    <version>1.1</version>
+    <version>1.1.1</version>
     <packaging>jar</packaging>
 
     <properties>

@@ -110,13 +110,19 @@ items:
 
 ```yaml
 本项目使用 Maven 进行管理。如果你想自己修改源码，请确保开发环境为 JDK 21。
-git clone https://github.com/yangzijian52/DailySellShop.git
+git clone https://github.com/你的用户名/DailySellShop.git
 cd DailySellShop
 mvn clean package
 
 ```
 构建完成后，插件将生成在 target/ 目录下。
 ## 🏗️ 更新信息
+### V1.1.1
+1.菜单插件兼容性修复 (关键)
+*  修复了通过 QuickMenu / DeluxeMenus / TrMenu 等插件调用 /ds 指令时，商店界面无法打开或闪退的问题。
+
+
+
 ### V1.1
 1.新增“每小时刷新”模式、配置结构优化、UI 体验改进<br>
 2.对版本1.21.11支持<br>

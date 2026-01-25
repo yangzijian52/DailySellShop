@@ -1,5 +1,6 @@
 package com.dailyshop;
 
+import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -18,11 +19,10 @@ public class ShopCommand implements CommandExecutor {
         Player player = (Player) sender;
         DailySellShop plugin = DailySellShop.getInstance();
 
+        // 处理重载指令
         if (args.length > 0 && args[0].equalsIgnoreCase("reload")) {
             if (player.hasPermission("dailysell.admin")) {
                 plugin.reloadConfig();
-
-                // 核心修改：调用 forceUpdate 重新读取模式和倍率
                 plugin.getShopManager().forceUpdate();
 
                 String mode = plugin.getConfig().getString("refresh-mode");
@@ -34,7 +34,10 @@ public class ShopCommand implements CommandExecutor {
             }
         }
 
-        ShopGui.open(player);
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            ShopGui.open(player);
+        });
+
         return true;
     }
 }
