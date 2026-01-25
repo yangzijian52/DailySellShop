@@ -110,7 +110,7 @@ items:
 
 ```yaml
 本项目使用 Maven 进行管理。如果你想自己修改源码，请确保开发环境为 JDK 21。
-git clone https://github.com/你的用户名/DailySellShop.git
+git clone https://github.com/yangzijian52/DailySellShop.git
 cd DailySellShop
 mvn clean package
 
