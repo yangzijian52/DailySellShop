@@ -19,7 +19,8 @@ public class ShopGui {
         if (Bukkit.getPluginManager().isPluginEnabled("floodgate")) {
             try {
                 isBedrock = FloodgateApi.getInstance().isFloodgatePlayer(player.getUniqueId());
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            }
         }
 
         if (isBedrock) {
@@ -36,13 +37,13 @@ public class ShopGui {
         int rows = (int) Math.ceil(items.size() / 9.0);
         rows = Math.max(1, Math.min(6, rows));
 
-        String title = manager.getShopTitle();
-
-        Inventory inv = Bukkit.createInventory(null, rows * 9, title);
+        Inventory inv = Bukkit.createInventory(null, rows * 9, manager.getShopTitle());
 
         for (String key : items) {
             Material mat = Material.getMaterial(key);
-            if (mat == null) continue;
+            if (mat == null) {
+                continue;
+            }
 
             int sold = manager.getPlayerSold(player.getUniqueId(), key);
             int limit = manager.getLimit(key);
@@ -50,6 +51,10 @@ public class ShopGui {
 
             ItemStack icon = new ItemStack(mat);
             ItemMeta meta = icon.getItemMeta();
+            if (meta == null) {
+                continue;
+            }
+
             meta.setDisplayName(manager.getDisplayName(key));
 
             List<String> lore = new ArrayList<>();
@@ -66,18 +71,15 @@ public class ShopGui {
 
             inv.addItem(icon);
         }
+
         player.openInventory(inv);
     }
 
     private static void openBedrockForm(Player player) {
         ShopManager manager = DailySellShop.getInstance().getShopManager();
+        String cleanTitle = manager.getShopTitle().replaceAll("§.", "");
 
-        String title = manager.getShopTitle();
-        String cleanTitle = title.replaceAll("§.", "");
-
-        SimpleForm.Builder builder = SimpleForm.builder()
-                .title(cleanTitle);
-
+        SimpleForm.Builder builder = SimpleForm.builder().title(cleanTitle);
         List<String> buttonKeyMapping = new ArrayList<>();
 
         for (String key : manager.getActiveItems()) {
@@ -96,7 +98,7 @@ public class ShopGui {
             if (index >= 0 && index < buttonKeyMapping.size()) {
                 String key = buttonKeyMapping.get(index);
                 ShopListener.executeSell(player, key);
-                openBedrockForm(player); // 重新打开刷新数据
+                openBedrockForm(player);
             }
         });
 

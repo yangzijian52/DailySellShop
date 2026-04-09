@@ -15,24 +15,24 @@ public class ShopListener implements Listener {
         String title = event.getView().getTitle();
         DailySellShop plugin = DailySellShop.getInstance();
 
-        // 获取配置中的两个可能的标题
-        String dailyTitle = plugin.getConfig().getString("messages.title-daily", "").replace("&", "§");
-        String hourlyTitle = plugin.getConfig().getString("messages.title-hourly", "").replace("&", "§");
+        String dailyTitle = DailySellShop.colorize(plugin.getConfig().getString("messages.title-daily", ""));
+        String hourlyTitle = DailySellShop.colorize(plugin.getConfig().getString("messages.title-hourly", ""));
 
-        // 核心修改：检查标题是否匹配其中任意一个
         if (!title.equals(dailyTitle) && !title.equals(hourlyTitle)) {
             return;
         }
 
         event.setCancelled(true);
-        if (event.getCurrentItem() == null) return;
-        Material mat = event.getCurrentItem().getType();
-        if (mat == Material.AIR) return;
+        if (event.getCurrentItem() == null || event.getCurrentItem().getType() == Material.AIR) {
+            return;
+        }
 
         Player player = (Player) event.getWhoClicked();
-        String key = mat.name();
+        String key = event.getCurrentItem().getType().name();
 
-        if (!plugin.getShopManager().getActiveItems().contains(key)) return;
+        if (!plugin.getShopManager().getActiveItems().contains(key)) {
+            return;
+        }
 
         executeSell(player, key);
         ShopGui.open(player);
@@ -43,28 +43,30 @@ public class ShopListener implements Listener {
         ShopManager manager = plugin.getShopManager();
         Material mat = Material.getMaterial(itemKey);
 
-        if (mat == null) return;
+        if (mat == null) {
+            return;
+        }
 
         int limit = manager.getLimit(itemKey);
         int sold = manager.getPlayerSold(player.getUniqueId(), itemKey);
 
         if (sold >= limit) {
-            String msg = plugin.getConfig().getString("messages.limit-reached").replace("&", "§");
-            player.sendMessage(plugin.getConfig().getString("messages.prefix").replace("&", "§") + msg);
+            String msg = DailySellShop.colorize(plugin.getConfig().getString("messages.limit-reached"));
+            player.sendMessage(DailySellShop.colorize(plugin.getConfig().getString("messages.prefix")) + msg);
             player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_PLING, 1, 1);
             return;
         }
 
         int playerHas = 0;
-        for (ItemStack is : player.getInventory().getContents()) {
-            if (is != null && is.getType() == mat) {
-                playerHas += is.getAmount();
+        for (ItemStack itemStack : player.getInventory().getContents()) {
+            if (itemStack != null && itemStack.getType() == mat) {
+                playerHas += itemStack.getAmount();
             }
         }
 
         if (playerHas <= 0) {
-            String msg = plugin.getConfig().getString("messages.no-item").replace("&", "§");
-            player.sendMessage(plugin.getConfig().getString("messages.prefix").replace("&", "§") + msg);
+            String msg = DailySellShop.colorize(plugin.getConfig().getString("messages.no-item"));
+            player.sendMessage(DailySellShop.colorize(plugin.getConfig().getString("messages.prefix")) + msg);
             player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_PLING, 1, 1);
             return;
         }
@@ -84,14 +86,13 @@ public class ShopListener implements Listener {
 
         manager.addPlayerSold(player.getUniqueId(), itemKey, finalAmount);
 
-        String msg = plugin.getConfig().getString("messages.sold")
-                .replace("&", "§")
+        String msg = DailySellShop.colorize(plugin.getConfig().getString("messages.sold"))
                 .replace("%amount%", String.valueOf(finalAmount))
                 .replace("%item%", manager.getDisplayName(itemKey))
                 .replace("%money%", String.format("%.2f", totalMoney))
                 .replace("%limit%", String.valueOf(limit - (sold + finalAmount)));
 
-        player.sendMessage(plugin.getConfig().getString("messages.prefix").replace("&", "§") + msg);
+        player.sendMessage(DailySellShop.colorize(plugin.getConfig().getString("messages.prefix")) + msg);
         player.playSound(player.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1, 1);
     }
 }

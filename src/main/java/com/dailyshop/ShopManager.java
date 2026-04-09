@@ -5,22 +5,21 @@ import org.bukkit.configuration.ConfigurationSection;
 
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class ShopManager {
+
     private final DailySellShop plugin;
-
     private final List<String> activeItems = new ArrayList<>();
-    private String currentRootSection = "items";
-
-    // 当前限额倍率
-    private double limitMultiplier = 1.0;
-
-    // 玩家数据
     private final Map<UUID, Map<String, Integer>> playerSales = new ConcurrentHashMap<>();
-
-    // 时间记录
+    private String currentRootSection = "items";
+    private double limitMultiplier = 1.0;
     private int lastDayOfYear = -1;
     private int lastHourOfDay = -1;
 
@@ -31,10 +30,7 @@ public class ShopManager {
         lastDayOfYear = now.getDayOfYear();
         lastHourOfDay = now.getHour();
 
-        // 启动时强制刷新一次
         forceUpdate();
-
-        // 定时任务：每20秒检查时间
         Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, this::checkTimeReset, 20L, 400L);
     }
 
@@ -43,7 +39,6 @@ public class ShopManager {
     }
 
     public void forceUpdate() {
-        // 重载配置时调用，根据当前模式设置倍率
         String mode = plugin.getConfig().getString("refresh-mode", "DAILY").toUpperCase();
         if (mode.equals("HOURLY")) {
             limitMultiplier = plugin.getConfig().getDouble("hourly-settings.multiplier", 0.5);
@@ -62,17 +57,14 @@ public class ShopManager {
         boolean shouldReset = false;
 
         if (mode.equals("DAILY")) {
-            // === 每日模式逻辑 ===
             if (currentDay != lastDayOfYear) {
-                plugin.getLogger().info("📅 [每日模式] 00:00 已到，刷新商店！");
+                plugin.getLogger().info("[每日模式] 已到北京时间 00:00，开始刷新商店。");
                 limitMultiplier = 1.0;
                 shouldReset = true;
             }
         } else if (mode.equals("HOURLY")) {
-            // === 每小时模式逻辑 ===
-            // 只要小时变了就刷 (包括0点)
             if (currentHour != lastHourOfDay) {
-                plugin.getLogger().info("⏰ [小时模式] 整点已到，刷新商店！");
+                plugin.getLogger().info("[小时模式] 已到整点，开始刷新商店。");
                 limitMultiplier = plugin.getConfig().getDouble("hourly-settings.multiplier", 0.5);
                 shouldReset = true;
             }
@@ -83,8 +75,8 @@ public class ShopManager {
             lastHourOfDay = currentHour;
 
             Bukkit.getScheduler().runTask(plugin, () -> {
-                playerSales.clear(); // 清空记录
-                rotateItems();       // 刷新物品
+                playerSales.clear();
+                rotateItems();
             });
         }
     }
@@ -111,9 +103,9 @@ public class ShopManager {
         }
     }
 
-    // --- 数据获取方法 ---
-
-    public List<String> getActiveItems() { return activeItems; }
+    public List<String> getActiveItems() {
+        return activeItems;
+    }
 
     public int getPlayerSold(UUID uuid, String itemKey) {
         return playerSales.computeIfAbsent(uuid, k -> new HashMap<>()).getOrDefault(itemKey, 0);
@@ -134,16 +126,14 @@ public class ShopManager {
     }
 
     public String getDisplayName(String key) {
-        return plugin.getConfig().getString(currentRootSection + "." + key + ".name", key).replace("&", "§");
+        return DailySellShop.colorize(plugin.getConfig().getString(currentRootSection + "." + key + ".name", key));
     }
 
-    // 获取当前模式对应的标题
     public String getShopTitle() {
         String mode = plugin.getConfig().getString("refresh-mode", "DAILY").toUpperCase();
         if (mode.equals("HOURLY")) {
-            return plugin.getConfig().getString("messages.title-hourly", "限时收购").replace("&", "§");
-        } else {
-            return plugin.getConfig().getString("messages.title-daily", "每日收购").replace("&", "§");
+            return DailySellShop.colorize(plugin.getConfig().getString("messages.title-hourly", "限时收购"));
         }
+        return DailySellShop.colorize(plugin.getConfig().getString("messages.title-daily", "每日收购"));
     }
 }

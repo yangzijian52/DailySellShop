@@ -6,11 +6,11 @@
 
     <groupId>com.dailyshop</groupId>
     <artifactId>DailySellShop</artifactId>
-    <version>1.1.1</version>
+    <version>1.1.2</version>
     <packaging>jar</packaging>
 
     <properties>
-        <java.version>21</java.version>
+        <java.version>25</java.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
@@ -19,7 +19,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.11.0</version>
+                <version>3.13.0</version>
                 <configuration>
                     <source>${java.version}</source>
                     <target>${java.version}</target>
@@ -30,30 +30,27 @@
             <resource>
                 <directory>src/main/resources</directory>
                 <filtering>true</filtering>
+                <includes>
+                    <include>*.yml</include>
+                    <include>*.yaml</include>
+                </includes>
             </resource>
         </resources>
     </build>
 
     <repositories>
-        <!-- Paper API -->
         <repository>
             <id>papermc</id>
             <url>https://repo.papermc.io/repository/maven-public/</url>
         </repository>
-
-        <!-- OpenCollab Releases (关键修复：用于下载 Cumulus 正式版) -->
         <repository>
             <id>opencollab-releases</id>
             <url>https://repo.opencollab.dev/maven-releases/</url>
         </repository>
-
-        <!-- OpenCollab Snapshots (用于下载 Floodgate API 开发版) -->
         <repository>
             <id>opencollab-snapshots</id>
             <url>https://repo.opencollab.dev/maven-snapshots/</url>
         </repository>
-
-        <!-- JitPack (用于 Vault) -->
         <repository>
             <id>jitpack.io</id>
             <url>https://jitpack.io</url>
@@ -61,23 +58,18 @@
     </repositories>
 
     <dependencies>
-        <!-- Paper 1.21 API -->
         <dependency>
             <groupId>io.papermc.paper</groupId>
             <artifactId>paper-api</artifactId>
-            <version>1.21.11-R0.1-SNAPSHOT</version>
+            <version>26.1.1.build.29-alpha</version>
             <scope>provided</scope>
         </dependency>
-
-        <!-- Vault API (经济) -->
         <dependency>
             <groupId>com.github.MilkBowl</groupId>
             <artifactId>VaultAPI</artifactId>
             <version>1.7</version>
             <scope>provided</scope>
         </dependency>
-
-        <!-- Floodgate API (基岩版表单) -->
         <dependency>
             <groupId>org.geysermc.floodgate</groupId>
             <artifactId>api</artifactId>

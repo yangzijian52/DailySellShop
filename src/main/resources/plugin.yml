@@ -1,10 +1,10 @@
 name: DailySellShop
-version: 1.0
+version: ${project.version}
 main: com.dailyshop.DailySellShop
 api-version: 1.21
 depend: [Vault]
 softdepend: [floodgate]
-authors: [YourName]
+authors: [yangzijian52]
 commands:
   ds:
     description: 打开每日收购界面
@@ -13,4 +13,3 @@ permissions:
   dailysell.admin:
     description: 允许重载配置
     default: op
-
