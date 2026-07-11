@@ -2,14 +2,28 @@ name: DailySellShop
 version: ${project.version}
 main: com.dailyshop.DailySellShop
 api-version: 1.21
-depend: [Vault]
-softdepend: [floodgate]
+softdepend: [Vault, floodgate]
 authors: [yangzijian52]
 commands:
   ds:
     description: 打开每日收购界面
     usage: /ds [reload]
+  dss:
+    description: 打开玩家购买商店
+    usage: /dss [search|open|reload|help]
 permissions:
   dailysell.admin:
     description: 允许重载配置
+    default: op
+  dailysellshop.shop.use:
+    description: 允许打开和搜索玩家商店
+    default: true
+  dailysellshop.shop.buy:
+    description: 允许购买普通商品
+    default: true
+  dailysellshop.shop.spawnegg:
+    description: 允许购买已启用的刷怪蛋
+    default: true
+  dailysellshop.shop.admin:
+    description: 允许管理和重载玩家商店
     default: op
