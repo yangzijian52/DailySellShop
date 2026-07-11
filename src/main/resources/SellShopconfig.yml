@@ -1,0 +1,6285 @@
+# DailySellShop 收购物品配置
+# 物品ID必须是标准的 Bukkit Material 名称 (全大写)
+# 参考: https://hub.spigotmc.org/javadocs/spigot/org/bukkit/Material.html
+# ==========================================
+#        DailySellShop 完整配置文件 (Paper 26.2)
+# /ds 使用本文件；/dss 购买商店使用 shopconfig.yml，但普通商品名称和基础价格来自本文件 items。
+# 修改后执行 /ds reload 或 /dss reload，两条命令都会重载两份配置并刷新商品列表。
+# 插件不会覆盖服务器中已经存在的配置；版本升级时需要自行同步新增节点和默认值。
+#
+# 编辑规则：
+# 1. 文件编码必须保持 UTF-8；缩进只能使用空格，不能使用 Tab。
+# 2. Material 键必须全大写；药水和附魔书扩展键不要改名，其真实材质由 material 字段决定。
+# 3. 文本支持 & 颜色代码，例如 &a 绿色、&c 红色、&l 粗体。
+# 4. 价格建议保留两位小数且不得为负数；修改原料价格时，应同步检查其合成品价格，避免套利。
+# 5. 本文件的菜单槽位仅影响 Java 箱子 GUI；Floodgate 基岩版使用功能等价的表单。
+# ==========================================
+
+# 时区用于判断每日/每小时刷新时间。必须是有效 ZoneId，例如 Asia/Shanghai、UTC。
+timezone: "Asia/Shanghai"
+
+# ==========================================
+#           刷新模式设置 (核心设置)
+# ==========================================
+# 模式选择:
+#   DAILY  = 每日刷新 (北京时间 00:00)，限额为 100%
+#   HOURLY = 每小时刷新 (北京时间整点)，限额为下方设定的倍率
+# 其他值会按 DAILY 的限额逻辑处理；建议只使用以上两个大写值。
+refresh-mode: "HOURLY"
+
+# 随机抽取设置
+random-rotation:
+  # true：每轮从 items 随机抽取；false：始终显示 static-items 中的固定商品。
+  enabled: true
+  # 每轮抽取数量。若数量超过 items 总数会自动按实际总数处理；还会受 menu.sell-slots 数量限制。
+  amount: 5
+
+# 仅在 refresh-mode 为 HOURLY 时生效
+hourly-settings:
+  # HOURLY 模式的额度倍率：实际限额 = daily-limit x multiplier，并向下取整且最少为 1。
+  # 例如 daily-limit=200、multiplier=0.5，则每小时可出售 100 个。
+  multiplier: 0.5
+
+
+# ==========================================
+#               语言与消息
+# ==========================================
+# 所有文本支持 & 颜色代码。prefix 会拼接到出售成功/失败和权限提示之前。
+# sold 支持：%amount%=出售数量、%item%=显示名、%money%=获得金额、%limit%=本轮剩余额度。
+# deposit-failed 支持 %error%=经济插件返回的失败原因；失败时已移除的物品会恢复。
+# config-reloaded 支持 %mode%=当前刷新模式。
+messages:
+  prefix: "&8[&a收购商&8] "
+  # 商店标题 (对应不同模式)
+  title-daily: "&0每日收购 (0点刷新)"
+  title-hourly: "&0限时收购 (整点刷新)"
+
+  sold: "&a成功出售 %amount% 个 %item%，获得 $%money%！(本轮剩余: %limit%)"
+  deposit-failed: "&c经济入账失败，物品已退回：%error%"
+  no-item: "&c你背包里没有足够的物品！"
+  limit-reached: "&c该物品本轮出售额度已用完！"
+  config-reloaded: "&a配置已重载，当前模式: %mode%"
+  no-permission: "&c你没有权限使用这个按钮。"
+
+# ==========================================
+#               箱子菜单样式
+# ==========================================
+# size 会限制在 9-54，并自动向上修正为 9 的倍数。
+# sell-slots 决定自动生成的收购按钮放在哪些格子里，槽位从 0 开始。
+# 不要让 sell-slots 与 buttons 的 slot 重复；收购商品后绘制，会覆盖同槽位按钮。
+# buttons 的节点 ID 可自定义；没有 commands 的按钮仅作为装饰，有 commands 的按钮才可点击。
+# 通用按钮字段：
+#   slot/index: 槽位（优先使用 slot）；material: Bukkit Material；amount: 图标数量 1-64；
+#   name/lore: 显示文本；permission: 可选权限；glow/isEnchant: 是否发光；
+#   hide-flags/hideFlag: 是否隐藏物品标志；custom-model-data: 资源包模型编号；commands: 点击动作。
+# 按钮文本占位符：{player}、%player%、%player_name%、{mode}。
+# commands 支持:
+#   [command] spawn        玩家身份执行命令
+#   [console] say {player} 控制台执行命令
+#   [op] fly               临时 OP 执行命令
+#   [message] &a文本       给玩家发送消息
+#   [close]                关闭菜单
+#   [sound] UI_BUTTON_CLICK 播放音效
+menu:
+  # Java 与基岩版都会使用对应模式标题；Java 标题支持 & 颜色代码，基岩版会自动移除颜色符号。
+  title-daily: "&0每日收购 &8| &70点刷新"
+  title-hourly: "&0限时收购 &8| &7整点刷新"
+  size: 54
+  sell-slots: [20, 21, 22, 23, 24]
+  # 自动生成的收购商品按钮样式。图标本身来自商品，以下只配置 Lore。
+  sell-item:
+    # 支持 {item}、{price}、{sold}、{limit}、{remaining}、{player}、{mode}。
+    lore:
+      - "&7单价: &a${price}"
+      - "&7本轮进度: &e{sold} &7/ &e{limit}"
+      - "&7剩余额度: &f{remaining}"
+      - ""
+      - "&e点击出售背包内该物品"
+    # true 时，额度用完会在 Lore 末尾追加 sold-out-line；false 时不追加。
+    append-sold-out-line: true
+    sold-out-line: "&c本轮额度已满"
+  # buttons 中可以混合装饰物品、返回按钮、关闭按钮和命令按钮。
+  # 基岩版表单只显示 commands 非空且玩家拥有 permission 的按钮。
+  buttons:
+    border-0:
+      slot: 0
+      material: BLACK_STAINED_GLASS_PANE
+      name: "&8边框"
+      hide-flags: true
+    border-1:
+      slot: 1
+      material: BLACK_STAINED_GLASS_PANE
+      name: "&8边框"
+      hide-flags: true
+    border-2:
+      slot: 2
+      material: BLACK_STAINED_GLASS_PANE
+      name: "&8边框"
+      hide-flags: true
+    border-3:
+      slot: 3
+      material: BLACK_STAINED_GLASS_PANE
+      name: "&8边框"
+      hide-flags: true
+    title:
+      slot: 4
+      material: EMERALD
+      name: "&a&l每日收购商店"
+      glow: true
+      hide-flags: true
+      lore:
+        - "&7欢迎你，&f{player}"
+        - "&7当前模式: &f{mode}"
+        - "&7收购物品会按配置定时刷新。"
+    border-5:
+      slot: 5
+      material: BLACK_STAINED_GLASS_PANE
+      name: "&8边框"
+      hide-flags: true
+    border-6:
+      slot: 6
+      material: BLACK_STAINED_GLASS_PANE
+      name: "&8边框"
+      hide-flags: true
+    border-7:
+      slot: 7
+      material: BLACK_STAINED_GLASS_PANE
+      name: "&8边框"
+      hide-flags: true
+    border-8:
+      slot: 8
+      material: BLACK_STAINED_GLASS_PANE
+      name: "&8边框"
+      hide-flags: true
+    help:
+      slot: 31
+      material: BOOK
+      name: "&b收购说明"
+      lore:
+        - "&7每轮每种物品都有出售额度。"
+        - "&7额度刷新后会重新随机收购物品。"
+      commands:
+        - "[message] &a把背包里的收购物品准备好后，点击对应物品即可出售。"
+        - "[sound] UI_BUTTON_CLICK"
+    back:
+      slot: 48
+      material: ARROW
+      name: "&a返回主菜单"
+      commands:
+        - "[command] quickmenu open"
+    close:
+      slot: 50
+      material: BARRIER
+      name: "&c关闭菜单"
+      commands:
+        - "[close]"
+
+# ==========================================
+#             收购物品列表
+# 格式:
+# 材质名(全大写):
+#   price: 每个物品的收购单价；/dss 普通购买价默认也从这里读取
+#   daily-limit: DAILY 模式每人每轮上限；HOURLY 模式还会乘 hourly-settings.multiplier
+#   name: 显示名称 (支持 & 颜色代码)
+# 药水额外使用 material: POTION 与 potion-type；附魔书使用 material: ENCHANTED_BOOK 与 enchantment。
+# 对这些特殊商品，插件只收购元数据完全相同的最高等级物品，不会把其他药水/附魔书误算为同一种。
+# ==========================================
+
+# ==========================================
+# [模式 A] 固定商店配置
+# 当 random-rotation.enabled: false 时使用此列表
+# 可按同样格式增加或删除条目；固定模式不会读取下方 items。
+# ==========================================
+static-items:
+  COBBLESTONE:
+    price: 0.01
+    daily-limit: 5000
+    name: "&7圆石"
+  DIRT:
+    price: 0.01
+    daily-limit: 5000
+    name: "&6泥土"
+  IRON_INGOT:
+    price: 0.72
+    daily-limit: 256
+    name: "&f铁锭"
+  # 在这里配置你希望永久显示的物品
+
+
+# ==========================================
+# [模式 B] 随机池配置
+# 当 random-rotation.enabled: true 时使用此列表
+# items 同时是 /dss 普通商品的数据源。删除条目会让该商品同时从随机收购池和购买商店下架。
+# 仅修改 price/name/daily-limit 后重载即可生效；修改键名会影响 creative-order.yml 的分类映射，不建议操作。
+# ==========================================
+items:
+  # 本随机池基于 Mojang 26.2 官方客户端 items 资源生成，并排除刷怪蛋、命令/创造专用物品和不可在原版生存中获得的方块。
+  # 基于 Paper 26.2 的 1418 个生存物品基线：移除泛型药水、喷溅药水、滞留药水和泛型附魔书，
+  # 加入 20 种最高等级普通药水和 43 本最高等级附魔书，当前共 1477 个可交易条目。
+  # 定价规则：基础资源按获取难度定价；可合成物按 Mojang 26.2 最低合法配方成本计算；
+  # 不可合成的 Boss、结构、宝库和探索战利品使用稀有度保底价；矿石价格包含时运产出风险。
+  # 压缩块、锭、粒等可逆合成原料按配方数量保持价格对应；药水和附魔书统一为 10。
+
+  # ================= 船与交通 =================
+  ACACIA_BOAT:
+    price: 0.10
+    daily-limit: 200
+    name: "&f金合欢木船"
+  ACACIA_CHEST_BOAT:
+    price: 0.26
+    daily-limit: 200
+    name: "&f金合欢木运输船"
+  BIRCH_BOAT:
+    price: 0.10
+    daily-limit: 200
+    name: "&f白桦木船"
+  BIRCH_CHEST_BOAT:
+    price: 0.26
+    daily-limit: 200
+    name: "&f白桦木运输船"
+  CARROT_ON_A_STICK:
+    price: 0.18
+    daily-limit: 200
+    name: "&f胡萝卜钓竿"
+  CHERRY_BOAT:
+    price: 0.10
+    daily-limit: 200
+    name: "&f樱花木船"
+  CHERRY_CHEST_BOAT:
+    price: 0.26
+    daily-limit: 200
+    name: "&f樱花木运输船"
+  CHEST_MINECART:
+    price: 3.76
+    daily-limit: 200
+    name: "&f运输矿车"
+  DARK_OAK_BOAT:
+    price: 0.10
+    daily-limit: 200
+    name: "&f深色橡木船"
+  DARK_OAK_CHEST_BOAT:
+    price: 0.26
+    daily-limit: 200
+    name: "&f深色橡木运输船"
+  FURNACE_MINECART:
+    price: 4.24
+    daily-limit: 200
+    name: "&f动力矿车"
+  HOPPER_MINECART:
+    price: 7.36
+    daily-limit: 200
+    name: "&f漏斗矿车"
+  JUNGLE_BOAT:
+    price: 0.10
+    daily-limit: 200
+    name: "&f丛林木船"
+  JUNGLE_CHEST_BOAT:
+    price: 0.26
+    daily-limit: 200
+    name: "&f丛林木运输船"
+  MANGROVE_BOAT:
+    price: 0.10
+    daily-limit: 200
+    name: "&f红树木船"
+  MANGROVE_CHEST_BOAT:
+    price: 0.26
+    daily-limit: 200
+    name: "&f红树木运输船"
+  MINECART:
+    price: 3.60
+    daily-limit: 200
+    name: "&f矿车"
+  OAK_BOAT:
+    price: 0.10
+    daily-limit: 200
+    name: "&f橡木船"
+  OAK_CHEST_BOAT:
+    price: 0.26
+    daily-limit: 200
+    name: "&f橡木运输船"
+  PALE_OAK_BOAT:
+    price: 0.10
+    daily-limit: 200
+    name: "&f苍白橡木船"
+  PALE_OAK_CHEST_BOAT:
+    price: 0.26
+    daily-limit: 200
+    name: "&f苍白橡木运输船"
+  SADDLE:
+    price: 1.44
+    daily-limit: 100
+    name: "&f鞍"
+  SPRUCE_BOAT:
+    price: 0.10
+    daily-limit: 200
+    name: "&f云杉木船"
+  SPRUCE_CHEST_BOAT:
+    price: 0.26
+    daily-limit: 200
+    name: "&f云杉木运输船"
+  TNT_MINECART:
+    price: 4.26
+    daily-limit: 200
+    name: "&fTNT矿车"
+  WARPED_FUNGUS_ON_A_STICK:
+    price: 0.17
+    daily-limit: 200
+    name: "&3诡异菌钓竿"
+
+  # ================= 旗帜图案陶片与锻造模板 =================
+  ANGLER_POTTERY_SHERD:
+    price: 8.00
+    daily-limit: 100
+    name: "&f垂钓纹样陶片"
+  ARCHER_POTTERY_SHERD:
+    price: 8.00
+    daily-limit: 100
+    name: "&f弓箭纹样陶片"
+  ARMS_UP_POTTERY_SHERD:
+    price: 8.00
+    daily-limit: 100
+    name: "&f举臂纹样陶片"
+  BLADE_POTTERY_SHERD:
+    price: 8.00
+    daily-limit: 100
+    name: "&f利刃纹样陶片"
+  BOLT_ARMOR_TRIM_SMITHING_TEMPLATE:
+    price: 37.43
+    daily-limit: 20
+    name: "&f锻造模板"
+  BORDURE_INDENTED_BANNER_PATTERN:
+    price: 0.10
+    daily-limit: 100
+    name: "&f波纹边旗帜图案"
+  BREWER_POTTERY_SHERD:
+    price: 8.00
+    daily-limit: 100
+    name: "&f佳酿纹样陶片"
+  BURN_POTTERY_SHERD:
+    price: 8.00
+    daily-limit: 100
+    name: "&f烈焰纹样陶片"
+  COAST_ARMOR_TRIM_SMITHING_TEMPLATE:
+    price: 35.08
+    daily-limit: 20
+    name: "&f锻造模板"
+  CREEPER_BANNER_PATTERN:
+    price: 25.06
+    daily-limit: 100
+    name: "&f旗帜图案"
+  DANGER_POTTERY_SHERD:
+    price: 8.00
+    daily-limit: 100
+    name: "&f危机纹样陶片"
+  DUNE_ARMOR_TRIM_SMITHING_TEMPLATE:
+    price: 35.16
+    daily-limit: 20
+    name: "&f锻造模板"
+  EXPLORER_POTTERY_SHERD:
+    price: 8.00
+    daily-limit: 100
+    name: "&f探险纹样陶片"
+  EYE_ARMOR_TRIM_SMITHING_TEMPLATE:
+    price: 35.02
+    daily-limit: 20
+    name: "&f锻造模板"
+  FIELD_MASONED_BANNER_PATTERN:
+    price: 0.10
+    daily-limit: 100
+    name: "&f砖纹旗帜图案"
+  FLOW_ARMOR_TRIM_SMITHING_TEMPLATE:
+    price: 40.00
+    daily-limit: 20
+    name: "&f锻造模板"
+  FLOW_BANNER_PATTERN:
+    price: 30.00
+    daily-limit: 100
+    name: "&f旗帜图案"
+  FLOW_POTTERY_SHERD:
+    price: 8.00
+    daily-limit: 100
+    name: "&f涡流纹样陶片"
+  FLOWER_BANNER_PATTERN:
+    price: 0.10
+    daily-limit: 100
+    name: "&f旗帜图案"
+  FRIEND_POTTERY_SHERD:
+    price: 8.00
+    daily-limit: 100
+    name: "&f挚友纹样陶片"
+  GLOBE_BANNER_PATTERN:
+    price: 15.00
+    daily-limit: 100
+    name: "&f旗帜图案"
+  GUSTER_BANNER_PATTERN:
+    price: 30.00
+    daily-limit: 100
+    name: "&f旗帜图案"
+  GUSTER_POTTERY_SHERD:
+    price: 8.00
+    daily-limit: 100
+    name: "&f旋风纹样陶片"
+  HEART_POTTERY_SHERD:
+    price: 8.00
+    daily-limit: 100
+    name: "&f爱心纹样陶片"
+  HEARTBREAK_POTTERY_SHERD:
+    price: 8.00
+    daily-limit: 100
+    name: "&f心碎纹样陶片"
+  HOST_ARMOR_TRIM_SMITHING_TEMPLATE:
+    price: 35.04
+    daily-limit: 20
+    name: "&f锻造模板"
+  HOWL_POTTERY_SHERD:
+    price: 8.00
+    daily-limit: 100
+    name: "&f狼嚎纹样陶片"
+  MINER_POTTERY_SHERD:
+    price: 8.00
+    daily-limit: 100
+    name: "&f采矿纹样陶片"
+  MOJANG_BANNER_PATTERN:
+    price: 150.06
+    daily-limit: 100
+    name: "&f旗帜图案"
+  MOURNER_POTTERY_SHERD:
+    price: 8.00
+    daily-limit: 100
+    name: "&f悲恸纹样陶片"
+  NETHERITE_UPGRADE_SMITHING_TEMPLATE:
+    price: 35.01
+    daily-limit: 3
+    name: "&b锻造模板"
+  PIGLIN_BANNER_PATTERN:
+    price: 15.00
+    daily-limit: 100
+    name: "&f旗帜图案"
+  PLENTY_POTTERY_SHERD:
+    price: 8.00
+    daily-limit: 100
+    name: "&f富饶纹样陶片"
+  PRIZE_POTTERY_SHERD:
+    price: 8.00
+    daily-limit: 100
+    name: "&f珍宝纹样陶片"
+  RAISER_ARMOR_TRIM_SMITHING_TEMPLATE:
+    price: 35.04
+    daily-limit: 20
+    name: "&f锻造模板"
+  RIB_ARMOR_TRIM_SMITHING_TEMPLATE:
+    price: 35.01
+    daily-limit: 20
+    name: "&f锻造模板"
+  SCRAPE_POTTERY_SHERD:
+    price: 8.00
+    daily-limit: 100
+    name: "&f刮削纹样陶片"
+  SENTRY_ARMOR_TRIM_SMITHING_TEMPLATE:
+    price: 35.08
+    daily-limit: 20
+    name: "&f锻造模板"
+  SHAPER_ARMOR_TRIM_SMITHING_TEMPLATE:
+    price: 35.04
+    daily-limit: 20
+    name: "&f锻造模板"
+  SHEAF_POTTERY_SHERD:
+    price: 8.00
+    daily-limit: 100
+    name: "&f麦捆纹样陶片"
+  SHELTER_POTTERY_SHERD:
+    price: 8.00
+    daily-limit: 100
+    name: "&f树荫纹样陶片"
+  SILENCE_ARMOR_TRIM_SMITHING_TEMPLATE:
+    price: 35.08
+    daily-limit: 20
+    name: "&f锻造模板"
+  SKULL_BANNER_PATTERN:
+    price: 40.06
+    daily-limit: 100
+    name: "&f旗帜图案"
+  SKULL_POTTERY_SHERD:
+    price: 8.00
+    daily-limit: 100
+    name: "&f头颅纹样陶片"
+  SNORT_POTTERY_SHERD:
+    price: 8.00
+    daily-limit: 100
+    name: "&f嗅探纹样陶片"
+  SNOUT_ARMOR_TRIM_SMITHING_TEMPLATE:
+    price: 35.08
+    daily-limit: 20
+    name: "&f锻造模板"
+  SPIRE_ARMOR_TRIM_SMITHING_TEMPLATE:
+    price: 35.10
+    daily-limit: 20
+    name: "&f锻造模板"
+  TIDE_ARMOR_TRIM_SMITHING_TEMPLATE:
+    price: 35.40
+    daily-limit: 20
+    name: "&f锻造模板"
+  VEX_ARMOR_TRIM_SMITHING_TEMPLATE:
+    price: 35.08
+    daily-limit: 20
+    name: "&f锻造模板"
+  WARD_ARMOR_TRIM_SMITHING_TEMPLATE:
+    price: 35.08
+    daily-limit: 20
+    name: "&f锻造模板"
+  WAYFINDER_ARMOR_TRIM_SMITHING_TEMPLATE:
+    price: 35.04
+    daily-limit: 20
+    name: "&f锻造模板"
+  WILD_ARMOR_TRIM_SMITHING_TEMPLATE:
+    price: 35.10
+    daily-limit: 20
+    name: "&f锻造模板"
+
+  # ================= 工具武器护甲 =================
+  ARMOR_STAND:
+    price: 0.10
+    daily-limit: 64
+    name: "&f盔甲架"
+  BLACK_HARNESS:
+    price: 1.06
+    daily-limit: 64
+    name: "&f黑色挽具"
+  BLUE_HARNESS:
+    price: 1.04
+    daily-limit: 64
+    name: "&3蓝色挽具"
+  BOW:
+    price: 0.18
+    daily-limit: 64
+    name: "&f弓"
+  BOWL:
+    price: 0.01
+    daily-limit: 64
+    name: "&f碗"
+  BROWN_HARNESS:
+    price: 1.06
+    daily-limit: 64
+    name: "&f棕色挽具"
+  CHAINMAIL_BOOTS:
+    price: 7.00
+    daily-limit: 64
+    name: "&f锁链靴子"
+  CHAINMAIL_CHESTPLATE:
+    price: 14.00
+    daily-limit: 64
+    name: "&f锁链胸甲"
+  CHAINMAIL_HELMET:
+    price: 8.00
+    daily-limit: 64
+    name: "&f锁链头盔"
+  CHAINMAIL_LEGGINGS:
+    price: 12.00
+    daily-limit: 64
+    name: "&f锁链护腿"
+  COPPER_AXE:
+    price: 0.83
+    daily-limit: 64
+    name: "&c铜斧"
+  COPPER_BOOTS:
+    price: 1.08
+    daily-limit: 64
+    name: "&c铜靴子"
+  COPPER_CHESTPLATE:
+    price: 2.16
+    daily-limit: 64
+    name: "&c铜胸甲"
+  COPPER_HELMET:
+    price: 1.35
+    daily-limit: 64
+    name: "&c铜头盔"
+  COPPER_HOE:
+    price: 0.56
+    daily-limit: 64
+    name: "&c铜锄"
+  COPPER_HORSE_ARMOR:
+    price: 0.50
+    daily-limit: 64
+    name: "&c铜马铠"
+  COPPER_LEGGINGS:
+    price: 1.89
+    daily-limit: 64
+    name: "&c铜护腿"
+  COPPER_NAUTILUS_ARMOR:
+    price: 0.50
+    daily-limit: 64
+    name: "&c铜鹦鹉螺铠"
+  COPPER_PICKAXE:
+    price: 0.83
+    daily-limit: 64
+    name: "&c铜镐"
+  COPPER_SHOVEL:
+    price: 0.29
+    daily-limit: 64
+    name: "&c铜锹"
+  COPPER_SPEAR:
+    price: 0.29
+    daily-limit: 64
+    name: "&c铜矛"
+  COPPER_SWORD:
+    price: 0.55
+    daily-limit: 64
+    name: "&c铜剑"
+  CROSSBOW:
+    price: 1.22
+    daily-limit: 64
+    name: "&f弩"
+  CYAN_HARNESS:
+    price: 1.02
+    daily-limit: 64
+    name: "&3青色挽具"
+  DIAMOND_AXE:
+    price: 15.02
+    daily-limit: 64
+    name: "&b钻石斧"
+  DIAMOND_BOOTS:
+    price: 20.00
+    daily-limit: 64
+    name: "&b钻石靴子"
+  DIAMOND_CHESTPLATE:
+    price: 40.00
+    daily-limit: 64
+    name: "&b钻石胸甲"
+  DIAMOND_HELMET:
+    price: 25.00
+    daily-limit: 64
+    name: "&b钻石头盔"
+  DIAMOND_HOE:
+    price: 10.02
+    daily-limit: 64
+    name: "&b钻石锄"
+  DIAMOND_HORSE_ARMOR:
+    price: 30.00
+    daily-limit: 64
+    name: "&b钻石马铠"
+  DIAMOND_LEGGINGS:
+    price: 35.00
+    daily-limit: 64
+    name: "&b钻石护腿"
+  DIAMOND_NAUTILUS_ARMOR:
+    price: 1.00
+    daily-limit: 64
+    name: "&b钻石鹦鹉螺铠"
+  DIAMOND_PICKAXE:
+    price: 15.02
+    daily-limit: 64
+    name: "&b钻石镐"
+  DIAMOND_SHOVEL:
+    price: 5.02
+    daily-limit: 64
+    name: "&b钻石锹"
+  DIAMOND_SPEAR:
+    price: 5.02
+    daily-limit: 64
+    name: "&b钻石矛"
+  DIAMOND_SWORD:
+    price: 10.01
+    daily-limit: 64
+    name: "&b钻石剑"
+  GOLDEN_AXE:
+    price: 2.72
+    daily-limit: 64
+    name: "&6金斧"
+  GOLDEN_BOOTS:
+    price: 3.60
+    daily-limit: 64
+    name: "&6金靴子"
+  GOLDEN_CHESTPLATE:
+    price: 7.20
+    daily-limit: 64
+    name: "&6金胸甲"
+  GOLDEN_HELMET:
+    price: 4.50
+    daily-limit: 64
+    name: "&6金头盔"
+  GOLDEN_HOE:
+    price: 1.82
+    daily-limit: 64
+    name: "&6金锄"
+  GOLDEN_HORSE_ARMOR:
+    price: 18.00
+    daily-limit: 64
+    name: "&6金马铠"
+  GOLDEN_LEGGINGS:
+    price: 6.30
+    daily-limit: 64
+    name: "&6金护腿"
+  GOLDEN_NAUTILUS_ARMOR:
+    price: 0.50
+    daily-limit: 64
+    name: "&6金鹦鹉螺铠"
+  GOLDEN_PICKAXE:
+    price: 2.72
+    daily-limit: 64
+    name: "&6金镐"
+  GOLDEN_SHOVEL:
+    price: 0.92
+    daily-limit: 64
+    name: "&6金锹"
+  GOLDEN_SPEAR:
+    price: 0.92
+    daily-limit: 64
+    name: "&6金矛"
+  GOLDEN_SWORD:
+    price: 1.81
+    daily-limit: 64
+    name: "&6金剑"
+  GRAY_HARNESS:
+    price: 1.03
+    daily-limit: 64
+    name: "&f灰色挽具"
+  GREEN_HARNESS:
+    price: 1.06
+    daily-limit: 64
+    name: "&a绿色挽具"
+  IRON_AXE:
+    price: 2.18
+    daily-limit: 64
+    name: "&f铁斧"
+  IRON_BOOTS:
+    price: 2.88
+    daily-limit: 64
+    name: "&f铁靴子"
+  IRON_CHESTPLATE:
+    price: 5.76
+    daily-limit: 64
+    name: "&f铁胸甲"
+  IRON_HELMET:
+    price: 3.60
+    daily-limit: 64
+    name: "&f铁头盔"
+  IRON_HOE:
+    price: 1.46
+    daily-limit: 64
+    name: "&f铁锄"
+  IRON_HORSE_ARMOR:
+    price: 12.00
+    daily-limit: 64
+    name: "&f铁马铠"
+  IRON_LEGGINGS:
+    price: 5.04
+    daily-limit: 64
+    name: "&f铁护腿"
+  IRON_NAUTILUS_ARMOR:
+    price: 0.50
+    daily-limit: 64
+    name: "&f铁鹦鹉螺铠"
+  IRON_PICKAXE:
+    price: 2.18
+    daily-limit: 64
+    name: "&f铁镐"
+  IRON_SHOVEL:
+    price: 0.74
+    daily-limit: 64
+    name: "&f铁锹"
+  IRON_SPEAR:
+    price: 0.74
+    daily-limit: 64
+    name: "&f铁矛"
+  IRON_SWORD:
+    price: 1.45
+    daily-limit: 64
+    name: "&f铁剑"
+  LEATHER_BOOTS:
+    price: 0.96
+    daily-limit: 64
+    name: "&f皮革靴子"
+  LEATHER_CHESTPLATE:
+    price: 1.92
+    daily-limit: 64
+    name: "&f皮革外套"
+  LEATHER_HELMET:
+    price: 1.20
+    daily-limit: 64
+    name: "&f皮革帽子"
+  LEATHER_HORSE_ARMOR:
+    price: 1.68
+    daily-limit: 64
+    name: "&f皮革马铠"
+  LEATHER_LEGGINGS:
+    price: 1.68
+    daily-limit: 64
+    name: "&f皮革裤子"
+  LIGHT_BLUE_HARNESS:
+    price: 1.02
+    daily-limit: 64
+    name: "&3淡蓝色挽具"
+  LIGHT_GRAY_HARNESS:
+    price: 1.02
+    daily-limit: 64
+    name: "&f淡灰色挽具"
+  LIME_HARNESS:
+    price: 1.03
+    daily-limit: 64
+    name: "&a黄绿色挽具"
+  MACE:
+    price: 125.00
+    daily-limit: 64
+    name: "&f重锤"
+  MAGENTA_HARNESS:
+    price: 1.02
+    daily-limit: 64
+    name: "&d品红色挽具"
+  NETHERITE_AXE:
+    price: 93.63
+    daily-limit: 64
+    name: "&b下界合金斧"
+  NETHERITE_BOOTS:
+    price: 98.61
+    daily-limit: 64
+    name: "&b下界合金靴子"
+  NETHERITE_CHESTPLATE:
+    price: 118.61
+    daily-limit: 64
+    name: "&b下界合金胸甲"
+  NETHERITE_HELMET:
+    price: 103.61
+    daily-limit: 64
+    name: "&b下界合金头盔"
+  NETHERITE_HOE:
+    price: 88.63
+    daily-limit: 64
+    name: "&b下界合金锄"
+  NETHERITE_HORSE_ARMOR:
+    price: 108.61
+    daily-limit: 64
+    name: "&b下界合金马铠"
+  NETHERITE_LEGGINGS:
+    price: 113.61
+    daily-limit: 64
+    name: "&b下界合金护腿"
+  NETHERITE_NAUTILUS_ARMOR:
+    price: 79.61
+    daily-limit: 64
+    name: "&b下界合金鹦鹉螺铠"
+  NETHERITE_PICKAXE:
+    price: 93.63
+    daily-limit: 64
+    name: "&b下界合金镐"
+  NETHERITE_SHOVEL:
+    price: 83.63
+    daily-limit: 64
+    name: "&b下界合金锹"
+  NETHERITE_SPEAR:
+    price: 83.63
+    daily-limit: 64
+    name: "&b下界合金矛"
+  NETHERITE_SWORD:
+    price: 88.62
+    daily-limit: 64
+    name: "&b下界合金剑"
+  ORANGE_HARNESS:
+    price: 1.02
+    daily-limit: 64
+    name: "&6橙色挽具"
+  PINK_HARNESS:
+    price: 1.01
+    daily-limit: 64
+    name: "&f粉红色挽具"
+  PURPLE_HARNESS:
+    price: 1.03
+    daily-limit: 64
+    name: "&d紫色挽具"
+  RED_HARNESS:
+    price: 1.02
+    daily-limit: 64
+    name: "&c红色挽具"
+  SHIELD:
+    price: 0.84
+    daily-limit: 64
+    name: "&f盾牌"
+  STONE_AXE:
+    price: 0.26
+    daily-limit: 64
+    name: "&f石斧"
+  STONE_HOE:
+    price: 0.18
+    daily-limit: 64
+    name: "&f石锄"
+  STONE_PICKAXE:
+    price: 0.26
+    daily-limit: 64
+    name: "&f石镐"
+  STONE_SHOVEL:
+    price: 0.10
+    daily-limit: 64
+    name: "&f石锹"
+  STONE_SPEAR:
+    price: 0.10
+    daily-limit: 64
+    name: "&f石矛"
+  STONE_SWORD:
+    price: 0.17
+    daily-limit: 64
+    name: "&f石剑"
+  TRIDENT:
+    price: 100.00
+    daily-limit: 64
+    name: "&f三叉戟"
+  TURTLE_HELMET:
+    price: 10.00
+    daily-limit: 64
+    name: "&f海龟壳"
+  WAXED_CHISELED_COPPER:
+    price: 0.62
+    daily-limit: 64
+    name: "&c涂蜡的雕纹铜块"
+  WAXED_COPPER_BARS:
+    price: 0.20
+    daily-limit: 64
+    name: "&c涂蜡的铜栏杆"
+  WAXED_COPPER_BLOCK:
+    price: 2.53
+    daily-limit: 64
+    name: "&c涂蜡的铜块"
+  WAXED_COPPER_BULB:
+    price: 2.67
+    daily-limit: 64
+    name: "&c涂蜡的铜灯"
+  WAXED_COPPER_CHAIN:
+    price: 0.43
+    daily-limit: 64
+    name: "&c涂蜡的铜链"
+  WAXED_COPPER_CHEST:
+    price: 2.42
+    daily-limit: 64
+    name: "&c涂蜡的铜箱子"
+  WAXED_COPPER_DOOR:
+    price: 0.64
+    daily-limit: 64
+    name: "&c涂蜡的铜门"
+  WAXED_COPPER_GOLEM_STATUE:
+    price: 0.20
+    daily-limit: 64
+    name: "&c涂蜡的铜傀儡像"
+  WAXED_COPPER_GRATE:
+    price: 0.63
+    daily-limit: 64
+    name: "&c涂蜡的铜格栅"
+  WAXED_COPPER_LANTERN:
+    price: 0.37
+    daily-limit: 64
+    name: "&c涂蜡的铜灯笼"
+  WAXED_COPPER_TRAPDOOR:
+    price: 1.18
+    daily-limit: 64
+    name: "&c涂蜡的铜活板门"
+  WAXED_CUT_COPPER:
+    price: 0.63
+    daily-limit: 64
+    name: "&c涂蜡的切制铜块"
+  WAXED_CUT_COPPER_SLAB:
+    price: 0.31
+    daily-limit: 64
+    name: "&c涂蜡的切制铜台阶"
+  WAXED_CUT_COPPER_STAIRS:
+    price: 0.63
+    daily-limit: 64
+    name: "&c涂蜡的切制铜楼梯"
+  WAXED_EXPOSED_CHISELED_COPPER:
+    price: 0.04
+    daily-limit: 64
+    name: "&c涂蜡的斑驳雕纹铜块"
+  WAXED_EXPOSED_COPPER:
+    price: 0.20
+    daily-limit: 64
+    name: "&c涂蜡的斑驳铜块"
+  WAXED_EXPOSED_COPPER_BARS:
+    price: 0.20
+    daily-limit: 64
+    name: "&c涂蜡的斑驳铜栏杆"
+  WAXED_EXPOSED_COPPER_BULB:
+    price: 0.92
+    daily-limit: 64
+    name: "&c涂蜡的斑驳铜灯"
+  WAXED_EXPOSED_COPPER_CHAIN:
+    price: 0.20
+    daily-limit: 64
+    name: "&c涂蜡的斑驳铜链"
+  WAXED_EXPOSED_COPPER_CHEST:
+    price: 0.20
+    daily-limit: 64
+    name: "&c涂蜡的斑驳铜箱子"
+  WAXED_EXPOSED_COPPER_DOOR:
+    price: 0.20
+    daily-limit: 64
+    name: "&c涂蜡的斑驳铜门"
+  WAXED_EXPOSED_COPPER_GOLEM_STATUE:
+    price: 0.20
+    daily-limit: 64
+    name: "&c涂蜡的斑驳铜傀儡像"
+  WAXED_EXPOSED_COPPER_GRATE:
+    price: 0.05
+    daily-limit: 64
+    name: "&c涂蜡的斑驳铜格栅"
+  WAXED_EXPOSED_COPPER_LANTERN:
+    price: 0.20
+    daily-limit: 64
+    name: "&c涂蜡的斑驳铜灯笼"
+  WAXED_EXPOSED_COPPER_TRAPDOOR:
+    price: 0.20
+    daily-limit: 64
+    name: "&c涂蜡的斑驳铜活板门"
+  WAXED_EXPOSED_CUT_COPPER:
+    price: 0.05
+    daily-limit: 64
+    name: "&c涂蜡的斑驳切制铜块"
+  WAXED_EXPOSED_CUT_COPPER_SLAB:
+    price: 0.02
+    daily-limit: 64
+    name: "&c涂蜡的斑驳切制铜台阶"
+  WAXED_EXPOSED_CUT_COPPER_STAIRS:
+    price: 0.05
+    daily-limit: 64
+    name: "&c涂蜡的斑驳切制铜楼梯"
+  WAXED_EXPOSED_LIGHTNING_ROD:
+    price: 0.30
+    daily-limit: 64
+    name: "&f涂蜡的斑驳避雷针"
+  WAXED_LIGHTNING_ROD:
+    price: 0.91
+    daily-limit: 64
+    name: "&f涂蜡的避雷针"
+  WAXED_OXIDIZED_CHISELED_COPPER:
+    price: 0.04
+    daily-limit: 64
+    name: "&c涂蜡的氧化雕纹铜块"
+  WAXED_OXIDIZED_COPPER:
+    price: 0.20
+    daily-limit: 64
+    name: "&c涂蜡的氧化铜块"
+  WAXED_OXIDIZED_COPPER_BARS:
+    price: 0.20
+    daily-limit: 64
+    name: "&c涂蜡的氧化铜栏杆"
+  WAXED_OXIDIZED_COPPER_BULB:
+    price: 0.92
+    daily-limit: 64
+    name: "&c涂蜡的氧化铜灯"
+  WAXED_OXIDIZED_COPPER_CHAIN:
+    price: 0.20
+    daily-limit: 64
+    name: "&c涂蜡的氧化铜链"
+  WAXED_OXIDIZED_COPPER_CHEST:
+    price: 0.20
+    daily-limit: 64
+    name: "&c涂蜡的氧化铜箱子"
+  WAXED_OXIDIZED_COPPER_DOOR:
+    price: 0.20
+    daily-limit: 64
+    name: "&c涂蜡的氧化铜门"
+  WAXED_OXIDIZED_COPPER_GOLEM_STATUE:
+    price: 0.20
+    daily-limit: 64
+    name: "&c涂蜡的氧化铜傀儡像"
+  WAXED_OXIDIZED_COPPER_GRATE:
+    price: 0.05
+    daily-limit: 64
+    name: "&c涂蜡的氧化铜格栅"
+  WAXED_OXIDIZED_COPPER_LANTERN:
+    price: 0.20
+    daily-limit: 64
+    name: "&c涂蜡的氧化铜灯笼"
+  WAXED_OXIDIZED_COPPER_TRAPDOOR:
+    price: 0.20
+    daily-limit: 64
+    name: "&c涂蜡的氧化铜活板门"
+  WAXED_OXIDIZED_CUT_COPPER:
+    price: 0.05
+    daily-limit: 64
+    name: "&c涂蜡的氧化切制铜块"
+  WAXED_OXIDIZED_CUT_COPPER_SLAB:
+    price: 0.02
+    daily-limit: 64
+    name: "&c涂蜡的氧化切制铜台阶"
+  WAXED_OXIDIZED_CUT_COPPER_STAIRS:
+    price: 0.05
+    daily-limit: 64
+    name: "&c涂蜡的氧化切制铜楼梯"
+  WAXED_OXIDIZED_LIGHTNING_ROD:
+    price: 0.30
+    daily-limit: 64
+    name: "&f涂蜡的氧化避雷针"
+  WAXED_WEATHERED_CHISELED_COPPER:
+    price: 0.04
+    daily-limit: 64
+    name: "&c涂蜡的锈蚀雕纹铜块"
+  WAXED_WEATHERED_COPPER:
+    price: 0.20
+    daily-limit: 64
+    name: "&c涂蜡的锈蚀铜块"
+  WAXED_WEATHERED_COPPER_BARS:
+    price: 0.20
+    daily-limit: 64
+    name: "&c涂蜡的锈蚀铜栏杆"
+  WAXED_WEATHERED_COPPER_BULB:
+    price: 0.92
+    daily-limit: 64
+    name: "&c涂蜡的锈蚀铜灯"
+  WAXED_WEATHERED_COPPER_CHAIN:
+    price: 0.20
+    daily-limit: 64
+    name: "&c涂蜡的锈蚀铜链"
+  WAXED_WEATHERED_COPPER_CHEST:
+    price: 0.20
+    daily-limit: 64
+    name: "&c涂蜡的锈蚀铜箱子"
+  WAXED_WEATHERED_COPPER_DOOR:
+    price: 0.20
+    daily-limit: 64
+    name: "&c涂蜡的锈蚀铜门"
+  WAXED_WEATHERED_COPPER_GOLEM_STATUE:
+    price: 0.20
+    daily-limit: 64
+    name: "&c涂蜡的锈蚀铜傀儡像"
+  WAXED_WEATHERED_COPPER_GRATE:
+    price: 0.05
+    daily-limit: 64
+    name: "&c涂蜡的锈蚀铜格栅"
+  WAXED_WEATHERED_COPPER_LANTERN:
+    price: 0.20
+    daily-limit: 64
+    name: "&c涂蜡的锈蚀铜灯笼"
+  WAXED_WEATHERED_COPPER_TRAPDOOR:
+    price: 0.20
+    daily-limit: 64
+    name: "&c涂蜡的锈蚀铜活板门"
+  WAXED_WEATHERED_CUT_COPPER:
+    price: 0.05
+    daily-limit: 64
+    name: "&c涂蜡的锈蚀切制铜块"
+  WAXED_WEATHERED_CUT_COPPER_SLAB:
+    price: 0.02
+    daily-limit: 64
+    name: "&c涂蜡的锈蚀切制铜台阶"
+  WAXED_WEATHERED_CUT_COPPER_STAIRS:
+    price: 0.05
+    daily-limit: 64
+    name: "&c涂蜡的锈蚀切制铜楼梯"
+  WAXED_WEATHERED_LIGHTNING_ROD:
+    price: 0.30
+    daily-limit: 64
+    name: "&c涂蜡的锈蚀避雷针"
+  WHITE_HARNESS:
+    price: 1.00
+    daily-limit: 64
+    name: "&f白色挽具"
+  WOLF_ARMOR:
+    price: 6.00
+    daily-limit: 64
+    name: "&f狼铠"
+  WOODEN_AXE:
+    price: 0.08
+    daily-limit: 64
+    name: "&f木斧"
+  WOODEN_HOE:
+    price: 0.06
+    daily-limit: 64
+    name: "&f木锄"
+  WOODEN_PICKAXE:
+    price: 0.08
+    daily-limit: 64
+    name: "&f木镐"
+  WOODEN_SHOVEL:
+    price: 0.04
+    daily-limit: 64
+    name: "&f木锹"
+  WOODEN_SPEAR:
+    price: 0.04
+    daily-limit: 64
+    name: "&f木矛"
+  WOODEN_SWORD:
+    price: 0.05
+    daily-limit: 64
+    name: "&f木剑"
+  YELLOW_HARNESS:
+    price: 1.02
+    daily-limit: 64
+    name: "&6黄色挽具"
+
+  # ================= 红石与功能方块 =================
+  ACACIA_BUTTON:
+    price: 0.02
+    daily-limit: 300
+    name: "&c金合欢木按钮"
+  ACACIA_PRESSURE_PLATE:
+    price: 0.04
+    daily-limit: 300
+    name: "&c金合欢木压力板"
+  ACTIVATOR_RAIL:
+    price: 0.74
+    daily-limit: 300
+    name: "&c激活铁轨"
+  BAMBOO_BUTTON:
+    price: 0.04
+    daily-limit: 300
+    name: "&c竹按钮"
+  BAMBOO_PRESSURE_PLATE:
+    price: 0.08
+    daily-limit: 300
+    name: "&c竹压力板"
+  BIRCH_BUTTON:
+    price: 0.02
+    daily-limit: 300
+    name: "&c白桦木按钮"
+  BIRCH_PRESSURE_PLATE:
+    price: 0.04
+    daily-limit: 300
+    name: "&c白桦木压力板"
+  CHERRY_BUTTON:
+    price: 0.02
+    daily-limit: 300
+    name: "&c樱花木按钮"
+  CHERRY_PRESSURE_PLATE:
+    price: 0.04
+    daily-limit: 300
+    name: "&c樱花木压力板"
+  COMPARATOR:
+    price: 1.07
+    daily-limit: 300
+    name: "&c红石比较器"
+  CRAFTER:
+    price: 4.54
+    daily-limit: 50
+    name: "&c合成器"
+  CRIMSON_BUTTON:
+    price: 0.02
+    daily-limit: 300
+    name: "&c绯红木按钮"
+  CRIMSON_PRESSURE_PLATE:
+    price: 0.04
+    daily-limit: 300
+    name: "&c绯红木压力板"
+  DARK_OAK_BUTTON:
+    price: 0.02
+    daily-limit: 300
+    name: "&c深色橡木按钮"
+  DARK_OAK_PRESSURE_PLATE:
+    price: 0.04
+    daily-limit: 300
+    name: "&c深色橡木压力板"
+  DAYLIGHT_DETECTOR:
+    price: 1.65
+    daily-limit: 300
+    name: "&c阳光探测器"
+  DETECTOR_RAIL:
+    price: 0.76
+    daily-limit: 300
+    name: "&c探测铁轨"
+  DISPENSER:
+    price: 0.84
+    daily-limit: 300
+    name: "&c发射器"
+  DROPPER:
+    price: 0.66
+    daily-limit: 300
+    name: "&c投掷器"
+  EXPOSED_LIGHTNING_ROD:
+    price: 0.20
+    daily-limit: 300
+    name: "&c斑驳的避雷针"
+  HEAVY_WEIGHTED_PRESSURE_PLATE:
+    price: 1.44
+    daily-limit: 300
+    name: "&c重质测重压力板"
+  HOPPER:
+    price: 3.76
+    daily-limit: 300
+    name: "&c漏斗"
+  JUNGLE_BUTTON:
+    price: 0.02
+    daily-limit: 300
+    name: "&c丛林木按钮"
+  JUNGLE_PRESSURE_PLATE:
+    price: 0.04
+    daily-limit: 300
+    name: "&c丛林木压力板"
+  LEVER:
+    price: 0.09
+    daily-limit: 300
+    name: "&c拉杆"
+  LIGHT_WEIGHTED_PRESSURE_PLATE:
+    price: 1.80
+    daily-limit: 300
+    name: "&c轻质测重压力板"
+  LIGHTNING_ROD:
+    price: 0.81
+    daily-limit: 300
+    name: "&c避雷针"
+  MANGROVE_BUTTON:
+    price: 0.02
+    daily-limit: 300
+    name: "&c红树木按钮"
+  MANGROVE_PRESSURE_PLATE:
+    price: 0.04
+    daily-limit: 300
+    name: "&c红树木压力板"
+  OAK_BUTTON:
+    price: 0.02
+    daily-limit: 300
+    name: "&c橡木按钮"
+  OAK_PRESSURE_PLATE:
+    price: 0.04
+    daily-limit: 300
+    name: "&c橡木压力板"
+  OBSERVER:
+    price: 1.18
+    daily-limit: 300
+    name: "&c侦测器"
+  OXIDIZED_LIGHTNING_ROD:
+    price: 0.20
+    daily-limit: 300
+    name: "&c氧化的避雷针"
+  PALE_OAK_BUTTON:
+    price: 0.02
+    daily-limit: 300
+    name: "&c苍白橡木按钮"
+  PALE_OAK_PRESSURE_PLATE:
+    price: 0.04
+    daily-limit: 300
+    name: "&c苍白橡木压力板"
+  PISTON:
+    price: 1.20
+    daily-limit: 300
+    name: "&c活塞"
+  POLISHED_BLACKSTONE_BUTTON:
+    price: 0.08
+    daily-limit: 300
+    name: "&c磨制黑石按钮"
+  POLISHED_BLACKSTONE_PRESSURE_PLATE:
+    price: 0.16
+    daily-limit: 300
+    name: "&c磨制黑石压力板"
+  POWERED_RAIL:
+    price: 0.91
+    daily-limit: 300
+    name: "&c动力铁轨"
+  RAIL:
+    price: 0.27
+    daily-limit: 300
+    name: "&c铁轨"
+  REPEATER:
+    price: 0.56
+    daily-limit: 300
+    name: "&c红石中继器"
+  SPRUCE_BUTTON:
+    price: 0.02
+    daily-limit: 300
+    name: "&c云杉木按钮"
+  SPRUCE_PRESSURE_PLATE:
+    price: 0.04
+    daily-limit: 300
+    name: "&c云杉木压力板"
+  STICKY_PISTON:
+    price: 1.30
+    daily-limit: 300
+    name: "&c黏性活塞"
+  STONE_BUTTON:
+    price: 0.08
+    daily-limit: 300
+    name: "&c石头按钮"
+  STONE_PRESSURE_PLATE:
+    price: 0.16
+    daily-limit: 300
+    name: "&c石头压力板"
+  TARGET:
+    price: 0.94
+    daily-limit: 300
+    name: "&c标靶"
+  TNT:
+    price: 0.66
+    daily-limit: 300
+    name: "&cTNT"
+  TRIPWIRE_HOOK:
+    price: 0.37
+    daily-limit: 300
+    name: "&c绊线钩"
+  WARPED_BUTTON:
+    price: 0.02
+    daily-limit: 300
+    name: "&3诡异木按钮"
+  WARPED_PRESSURE_PLATE:
+    price: 0.04
+    daily-limit: 300
+    name: "&3诡异木压力板"
+  WEATHERED_LIGHTNING_ROD:
+    price: 0.20
+    daily-limit: 300
+    name: "&c锈蚀的避雷针"
+
+  # ================= 矿物与原材料 =================
+  AMETHYST_BLOCK:
+    price: 0.80
+    daily-limit: 500
+    name: "&d紫水晶块"
+  AMETHYST_CLUSTER:
+    price: 0.10
+    daily-limit: 500
+    name: "&d紫水晶簇"
+  AMETHYST_SHARD:
+    price: 0.20
+    daily-limit: 250
+    name: "&d紫水晶碎片"
+  ANCIENT_DEBRIS:
+    price: 10.00
+    daily-limit: 40
+    name: "&f远古残骸"
+  CHARCOAL:
+    price: 0.08
+    daily-limit: 1000
+    name: "&f木炭"
+  CHISELED_COPPER:
+    price: 0.60
+    daily-limit: 500
+    name: "&c雕纹铜块"
+  CHISELED_QUARTZ_BLOCK:
+    price: 2.00
+    daily-limit: 500
+    name: "&f雕纹石英块"
+  CHISELED_RESIN_BRICKS:
+    price: 0.40
+    daily-limit: 500
+    name: "&f雕纹树脂砖块"
+  COAL:
+    price: 0.20
+    daily-limit: 1000
+    name: "&f煤炭"
+  COAL_BLOCK:
+    price: 1.80
+    daily-limit: 500
+    name: "&f煤炭块"
+  COAL_ORE:
+    price: 0.60
+    daily-limit: 200
+    name: "&f煤矿石"
+  COPPER_BARS:
+    price: 0.10
+    daily-limit: 500
+    name: "&c铜栏杆"
+  COPPER_BLOCK:
+    price: 2.43
+    daily-limit: 500
+    name: "&c铜块"
+  COPPER_BULB:
+    price: 2.59
+    daily-limit: 64
+    name: "&c铜灯"
+  COPPER_CHAIN:
+    price: 0.33
+    daily-limit: 500
+    name: "&c铜链"
+  COPPER_CHEST:
+    price: 2.32
+    daily-limit: 500
+    name: "&c铜箱子"
+  COPPER_DOOR:
+    price: 0.54
+    daily-limit: 500
+    name: "&c铜门"
+  COPPER_GOLEM_STATUE:
+    price: 0.10
+    daily-limit: 500
+    name: "&c铜傀儡像"
+  COPPER_GRATE:
+    price: 0.60
+    daily-limit: 500
+    name: "&c铜格栅"
+  COPPER_INGOT:
+    price: 0.27
+    daily-limit: 250
+    name: "&c铜锭"
+  COPPER_LANTERN:
+    price: 0.27
+    daily-limit: 500
+    name: "&c铜灯笼"
+  COPPER_NUGGET:
+    price: 0.03
+    daily-limit: 500
+    name: "&c铜粒"
+  COPPER_ORE:
+    price: 2.00
+    daily-limit: 200
+    name: "&c铜矿石"
+  COPPER_TORCH:
+    price: 0.03
+    daily-limit: 500
+    name: "&c铜火把"
+  COPPER_TRAPDOOR:
+    price: 1.08
+    daily-limit: 500
+    name: "&c铜活板门"
+  CUT_COPPER:
+    price: 0.60
+    daily-limit: 500
+    name: "&c切制铜块"
+  CUT_COPPER_SLAB:
+    price: 0.30
+    daily-limit: 500
+    name: "&c切制铜台阶"
+  CUT_COPPER_STAIRS:
+    price: 0.60
+    daily-limit: 500
+    name: "&c切制铜楼梯"
+  DEEPSLATE_COAL_ORE:
+    price: 0.65
+    daily-limit: 128
+    name: "&f深层煤矿石"
+  DEEPSLATE_COPPER_ORE:
+    price: 2.20
+    daily-limit: 128
+    name: "&c深层铜矿石"
+  DEEPSLATE_DIAMOND_ORE:
+    price: 13.00
+    daily-limit: 64
+    name: "&b深层钻石矿石"
+  DEEPSLATE_EMERALD_ORE:
+    price: 9.00
+    daily-limit: 64
+    name: "&a深层绿宝石矿石"
+  DEEPSLATE_GOLD_ORE:
+    price: 2.10
+    daily-limit: 128
+    name: "&6深层金矿石"
+  DEEPSLATE_IRON_ORE:
+    price: 1.70
+    daily-limit: 128
+    name: "&f深层铁矿石"
+  DEEPSLATE_LAPIS_ORE:
+    price: 4.50
+    daily-limit: 128
+    name: "&f深层青金石矿石"
+  DEEPSLATE_REDSTONE_ORE:
+    price: 2.20
+    daily-limit: 128
+    name: "&c深层红石矿石"
+  DIAMOND:
+    price: 5.00
+    daily-limit: 64
+    name: "&b钻石"
+  DIAMOND_BLOCK:
+    price: 45.00
+    daily-limit: 64
+    name: "&b钻石块"
+  DIAMOND_ORE:
+    price: 12.00
+    daily-limit: 64
+    name: "&b钻石矿石"
+  EMERALD:
+    price: 3.00
+    daily-limit: 50
+    name: "&a绿宝石"
+  EMERALD_BLOCK:
+    price: 27.00
+    daily-limit: 64
+    name: "&a绿宝石块"
+  EMERALD_ORE:
+    price: 8.00
+    daily-limit: 64
+    name: "&a绿宝石矿石"
+  ENCHANTED_GOLDEN_APPLE:
+    price: 150.00
+    daily-limit: 8
+    name: "&b附魔金苹果"
+  EXPOSED_CHISELED_COPPER:
+    price: 0.02
+    daily-limit: 500
+    name: "&c斑驳的雕纹铜块"
+  EXPOSED_COPPER:
+    price: 0.10
+    daily-limit: 500
+    name: "&c斑驳的铜块"
+  EXPOSED_COPPER_BARS:
+    price: 0.10
+    daily-limit: 500
+    name: "&c斑驳的铜栏杆"
+  EXPOSED_COPPER_BULB:
+    price: 0.85
+    daily-limit: 500
+    name: "&c斑驳的铜灯"
+  EXPOSED_COPPER_CHAIN:
+    price: 0.10
+    daily-limit: 500
+    name: "&c斑驳的铜链"
+  EXPOSED_COPPER_CHEST:
+    price: 0.10
+    daily-limit: 500
+    name: "&c斑驳的铜箱子"
+  EXPOSED_COPPER_DOOR:
+    price: 0.10
+    daily-limit: 500
+    name: "&c斑驳的铜门"
+  EXPOSED_COPPER_GOLEM_STATUE:
+    price: 0.10
+    daily-limit: 500
+    name: "&c斑驳的铜傀儡像"
+  EXPOSED_COPPER_GRATE:
+    price: 0.02
+    daily-limit: 500
+    name: "&c斑驳的铜格栅"
+  EXPOSED_COPPER_LANTERN:
+    price: 0.10
+    daily-limit: 500
+    name: "&c斑驳的铜灯笼"
+  EXPOSED_COPPER_TRAPDOOR:
+    price: 0.10
+    daily-limit: 500
+    name: "&c斑驳的铜活板门"
+  EXPOSED_CUT_COPPER:
+    price: 0.02
+    daily-limit: 500
+    name: "&c斑驳的切制铜块"
+  EXPOSED_CUT_COPPER_SLAB:
+    price: 0.01
+    daily-limit: 500
+    name: "&c斑驳的切制铜台阶"
+  EXPOSED_CUT_COPPER_STAIRS:
+    price: 0.02
+    daily-limit: 500
+    name: "&c斑驳的切制铜楼梯"
+  GOLD_BLOCK:
+    price: 8.10
+    daily-limit: 500
+    name: "&6金块"
+  GOLD_INGOT:
+    price: 0.90
+    daily-limit: 200
+    name: "&6金锭"
+  GOLD_NUGGET:
+    price: 0.10
+    daily-limit: 500
+    name: "&6金粒"
+  GOLD_ORE:
+    price: 2.00
+    daily-limit: 200
+    name: "&6金矿石"
+  GOLDEN_APPLE:
+    price: 7.40
+    daily-limit: 500
+    name: "&6金苹果"
+  GOLDEN_CARROT:
+    price: 0.85
+    daily-limit: 500
+    name: "&6金胡萝卜"
+  GOLDEN_DANDELION:
+    price: 0.84
+    daily-limit: 500
+    name: "&6金蒲公英"
+  HEAVY_CORE:
+    price: 120.00
+    daily-limit: 1
+    name: "&b沉重核心"
+  IRON_BARS:
+    price: 0.27
+    daily-limit: 500
+    name: "&f铁栏杆"
+  IRON_BLOCK:
+    price: 6.48
+    daily-limit: 500
+    name: "&f铁块"
+  IRON_CHAIN:
+    price: 0.88
+    daily-limit: 500
+    name: "&f铁链"
+  IRON_DOOR:
+    price: 1.44
+    daily-limit: 500
+    name: "&f铁门"
+  IRON_INGOT:
+    price: 0.72
+    daily-limit: 256
+    name: "&f铁锭"
+  IRON_NUGGET:
+    price: 0.08
+    daily-limit: 500
+    name: "&f铁粒"
+  IRON_ORE:
+    price: 1.60
+    daily-limit: 200
+    name: "&f铁矿石"
+  IRON_TRAPDOOR:
+    price: 2.88
+    daily-limit: 500
+    name: "&f铁活板门"
+  LAPIS_BLOCK:
+    price: 1.80
+    daily-limit: 500
+    name: "&f青金石块"
+  LAPIS_LAZULI:
+    price: 0.20
+    daily-limit: 320
+    name: "&f青金石"
+  LAPIS_ORE:
+    price: 4.00
+    daily-limit: 200
+    name: "&f青金石矿石"
+  LARGE_AMETHYST_BUD:
+    price: 0.10
+    daily-limit: 500
+    name: "&d大型紫晶芽"
+  MEDIUM_AMETHYST_BUD:
+    price: 0.10
+    daily-limit: 500
+    name: "&d中型紫晶芽"
+  NETHER_GOLD_ORE:
+    price: 1.20
+    daily-limit: 200
+    name: "&6下界金矿石"
+  NETHER_QUARTZ_ORE:
+    price: 1.50
+    daily-limit: 200
+    name: "&f下界石英矿石"
+  NETHERITE_BLOCK:
+    price: 392.40
+    daily-limit: 500
+    name: "&b下界合金块"
+  NETHERITE_INGOT:
+    price: 43.60
+    daily-limit: 5
+    name: "&b下界合金锭"
+  NETHERITE_SCRAP:
+    price: 10.00
+    daily-limit: 30
+    name: "&b下界合金碎片"
+  OXIDIZED_CHISELED_COPPER:
+    price: 0.02
+    daily-limit: 500
+    name: "&c氧化的雕纹铜块"
+  OXIDIZED_COPPER:
+    price: 0.10
+    daily-limit: 500
+    name: "&c氧化的铜块"
+  OXIDIZED_COPPER_BARS:
+    price: 0.10
+    daily-limit: 500
+    name: "&c氧化的铜栏杆"
+  OXIDIZED_COPPER_BULB:
+    price: 0.85
+    daily-limit: 500
+    name: "&c氧化的铜灯"
+  OXIDIZED_COPPER_CHAIN:
+    price: 0.10
+    daily-limit: 500
+    name: "&c氧化的铜链"
+  OXIDIZED_COPPER_CHEST:
+    price: 0.10
+    daily-limit: 500
+    name: "&c氧化的铜箱子"
+  OXIDIZED_COPPER_DOOR:
+    price: 0.10
+    daily-limit: 500
+    name: "&c氧化的铜门"
+  OXIDIZED_COPPER_GOLEM_STATUE:
+    price: 0.10
+    daily-limit: 500
+    name: "&c氧化的铜傀儡像"
+  OXIDIZED_COPPER_GRATE:
+    price: 0.02
+    daily-limit: 500
+    name: "&c氧化的铜格栅"
+  OXIDIZED_COPPER_LANTERN:
+    price: 0.10
+    daily-limit: 500
+    name: "&c氧化的铜灯笼"
+  OXIDIZED_COPPER_TRAPDOOR:
+    price: 0.10
+    daily-limit: 500
+    name: "&c氧化的铜活板门"
+  OXIDIZED_CUT_COPPER:
+    price: 0.02
+    daily-limit: 500
+    name: "&c氧化的切制铜块"
+  OXIDIZED_CUT_COPPER_SLAB:
+    price: 0.01
+    daily-limit: 500
+    name: "&c氧化的切制铜台阶"
+  OXIDIZED_CUT_COPPER_STAIRS:
+    price: 0.02
+    daily-limit: 500
+    name: "&c氧化的切制铜楼梯"
+  QUARTZ:
+    price: 0.50
+    daily-limit: 128
+    name: "&f下界石英"
+  QUARTZ_BLOCK:
+    price: 2.00
+    daily-limit: 500
+    name: "&f石英块"
+  QUARTZ_BRICKS:
+    price: 2.00
+    daily-limit: 500
+    name: "&f石英砖"
+  QUARTZ_PILLAR:
+    price: 2.00
+    daily-limit: 500
+    name: "&f石英柱"
+  QUARTZ_SLAB:
+    price: 1.00
+    daily-limit: 500
+    name: "&f石英台阶"
+  QUARTZ_STAIRS:
+    price: 2.00
+    daily-limit: 500
+    name: "&f石英楼梯"
+  RAW_COPPER:
+    price: 0.24
+    daily-limit: 500
+    name: "&c粗铜"
+  RAW_COPPER_BLOCK:
+    price: 2.16
+    daily-limit: 500
+    name: "&c粗铜块"
+  RAW_GOLD:
+    price: 0.80
+    daily-limit: 200
+    name: "&6粗金"
+  RAW_GOLD_BLOCK:
+    price: 7.20
+    daily-limit: 200
+    name: "&6粗金块"
+  RAW_IRON:
+    price: 0.64
+    daily-limit: 250
+    name: "&f粗铁"
+  RAW_IRON_BLOCK:
+    price: 5.76
+    daily-limit: 256
+    name: "&f粗铁块"
+  REDSTONE:
+    price: 0.10
+    daily-limit: 500
+    name: "&c红石粉"
+  REDSTONE_BLOCK:
+    price: 0.90
+    daily-limit: 500
+    name: "&c红石块"
+  REDSTONE_LAMP:
+    price: 0.48
+    daily-limit: 500
+    name: "&c红石灯"
+  REDSTONE_ORE:
+    price: 2.00
+    daily-limit: 200
+    name: "&c红石矿石"
+  REDSTONE_TORCH:
+    price: 0.11
+    daily-limit: 500
+    name: "&c红石火把"
+  RESIN_BLOCK:
+    price: 0.90
+    daily-limit: 500
+    name: "&f树脂块"
+  RESIN_BRICK:
+    price: 0.10
+    daily-limit: 500
+    name: "&f树脂砖"
+  RESIN_BRICK_SLAB:
+    price: 0.20
+    daily-limit: 500
+    name: "&f树脂砖台阶"
+  RESIN_BRICK_STAIRS:
+    price: 0.40
+    daily-limit: 500
+    name: "&f树脂砖楼梯"
+  RESIN_BRICK_WALL:
+    price: 0.40
+    daily-limit: 500
+    name: "&f树脂砖墙"
+  RESIN_BRICKS:
+    price: 0.40
+    daily-limit: 500
+    name: "&f树脂砖块"
+  RESIN_CLUMP:
+    price: 0.10
+    daily-limit: 500
+    name: "&f树脂团"
+  SMALL_AMETHYST_BUD:
+    price: 0.10
+    daily-limit: 500
+    name: "&d小型紫晶芽"
+  SMOOTH_QUARTZ:
+    price: 2.00
+    daily-limit: 500
+    name: "&f平滑石英块"
+  SMOOTH_QUARTZ_SLAB:
+    price: 1.00
+    daily-limit: 500
+    name: "&f平滑石英台阶"
+  SMOOTH_QUARTZ_STAIRS:
+    price: 2.00
+    daily-limit: 500
+    name: "&f平滑石英楼梯"
+  SPORE_BLOSSOM:
+    price: 0.10
+    daily-limit: 500
+    name: "&f孢子花"
+  WEATHERED_CHISELED_COPPER:
+    price: 0.02
+    daily-limit: 500
+    name: "&c锈蚀的雕纹铜块"
+  WEATHERED_COPPER:
+    price: 0.10
+    daily-limit: 500
+    name: "&c锈蚀的铜块"
+  WEATHERED_COPPER_BARS:
+    price: 0.10
+    daily-limit: 500
+    name: "&c锈蚀的铜栏杆"
+  WEATHERED_COPPER_BULB:
+    price: 0.85
+    daily-limit: 500
+    name: "&c锈蚀的铜灯"
+  WEATHERED_COPPER_CHAIN:
+    price: 0.10
+    daily-limit: 500
+    name: "&c锈蚀的铜链"
+  WEATHERED_COPPER_CHEST:
+    price: 0.10
+    daily-limit: 500
+    name: "&c锈蚀的铜箱子"
+  WEATHERED_COPPER_DOOR:
+    price: 0.10
+    daily-limit: 500
+    name: "&c锈蚀的铜门"
+  WEATHERED_COPPER_GOLEM_STATUE:
+    price: 0.10
+    daily-limit: 500
+    name: "&c锈蚀的铜傀儡像"
+  WEATHERED_COPPER_GRATE:
+    price: 0.02
+    daily-limit: 500
+    name: "&c锈蚀的铜格栅"
+  WEATHERED_COPPER_LANTERN:
+    price: 0.10
+    daily-limit: 500
+    name: "&c锈蚀的铜灯笼"
+  WEATHERED_COPPER_TRAPDOOR:
+    price: 0.10
+    daily-limit: 500
+    name: "&c锈蚀的铜活板门"
+  WEATHERED_CUT_COPPER:
+    price: 0.02
+    daily-limit: 500
+    name: "&c锈蚀的切制铜块"
+  WEATHERED_CUT_COPPER_SLAB:
+    price: 0.01
+    daily-limit: 500
+    name: "&c锈蚀的切制铜台阶"
+  WEATHERED_CUT_COPPER_STAIRS:
+    price: 0.02
+    daily-limit: 500
+    name: "&c锈蚀的切制铜楼梯"
+
+  # ================= 木材与木制方块 =================
+  ACACIA_LEAVES:
+    price: 0.08
+    daily-limit: 800
+    name: "&6金合欢树叶"
+  ACACIA_LOG:
+    price: 0.08
+    daily-limit: 800
+    name: "&6金合欢原木"
+  ACACIA_PLANKS:
+    price: 0.02
+    daily-limit: 800
+    name: "&6金合欢木板"
+  ACACIA_SAPLING:
+    price: 0.08
+    daily-limit: 800
+    name: "&6金合欢树苗"
+  ACACIA_SHELF:
+    price: 0.08
+    daily-limit: 800
+    name: "&6金合欢木展示架"
+  ACACIA_WOOD:
+    price: 0.10
+    daily-limit: 800
+    name: "&6金合欢木"
+  AZALEA_LEAVES:
+    price: 0.08
+    daily-limit: 800
+    name: "&6杜鹃树叶"
+  BAMBOO:
+    price: 0.02
+    daily-limit: 3000
+    name: "&6竹子"
+  BAMBOO_BLOCK:
+    price: 0.18
+    daily-limit: 800
+    name: "&6竹块"
+  BAMBOO_CHEST_RAFT:
+    price: 0.36
+    daily-limit: 800
+    name: "&6运输竹筏"
+  BAMBOO_DOOR:
+    price: 0.08
+    daily-limit: 800
+    name: "&6竹门"
+  BAMBOO_FENCE:
+    price: 0.06
+    daily-limit: 800
+    name: "&6竹栅栏"
+  BAMBOO_FENCE_GATE:
+    price: 0.12
+    daily-limit: 800
+    name: "&6竹栅栏门"
+  BAMBOO_HANGING_SIGN:
+    price: 0.37
+    daily-limit: 800
+    name: "&6悬挂式竹告示牌"
+  BAMBOO_MOSAIC:
+    price: 0.04
+    daily-limit: 800
+    name: "&6竹马赛克"
+  BAMBOO_MOSAIC_SLAB:
+    price: 0.02
+    daily-limit: 800
+    name: "&6竹马赛克台阶"
+  BAMBOO_MOSAIC_STAIRS:
+    price: 0.06
+    daily-limit: 800
+    name: "&6竹马赛克楼梯"
+  BAMBOO_PLANKS:
+    price: 0.04
+    daily-limit: 800
+    name: "&6竹板"
+  BAMBOO_RAFT:
+    price: 0.20
+    daily-limit: 800
+    name: "&6竹筏"
+  BAMBOO_SHELF:
+    price: 0.08
+    daily-limit: 800
+    name: "&6竹展示架"
+  BAMBOO_SIGN:
+    price: 0.08
+    daily-limit: 800
+    name: "&6竹告示牌"
+  BAMBOO_SLAB:
+    price: 0.02
+    daily-limit: 800
+    name: "&6竹台阶"
+  BAMBOO_STAIRS:
+    price: 0.06
+    daily-limit: 800
+    name: "&6竹楼梯"
+  BAMBOO_TRAPDOOR:
+    price: 0.12
+    daily-limit: 800
+    name: "&6竹活板门"
+  BIRCH_LEAVES:
+    price: 0.08
+    daily-limit: 800
+    name: "&6白桦树叶"
+  BIRCH_LOG:
+    price: 0.08
+    daily-limit: 800
+    name: "&6白桦原木"
+  BIRCH_PLANKS:
+    price: 0.02
+    daily-limit: 800
+    name: "&6白桦木板"
+  BIRCH_SAPLING:
+    price: 0.08
+    daily-limit: 800
+    name: "&6白桦树苗"
+  BIRCH_SHELF:
+    price: 0.08
+    daily-limit: 800
+    name: "&6白桦木展示架"
+  BIRCH_WOOD:
+    price: 0.10
+    daily-limit: 800
+    name: "&6白桦木"
+  BOOKSHELF:
+    price: 1.38
+    daily-limit: 800
+    name: "&6书架"
+  CHERRY_LEAVES:
+    price: 0.08
+    daily-limit: 800
+    name: "&6樱花树叶"
+  CHERRY_LOG:
+    price: 0.08
+    daily-limit: 800
+    name: "&6樱花原木"
+  CHERRY_PLANKS:
+    price: 0.02
+    daily-limit: 800
+    name: "&6樱花木板"
+  CHERRY_SAPLING:
+    price: 0.08
+    daily-limit: 800
+    name: "&6樱花树苗"
+  CHERRY_SHELF:
+    price: 0.08
+    daily-limit: 800
+    name: "&6樱花木展示架"
+  CHERRY_WOOD:
+    price: 0.10
+    daily-limit: 800
+    name: "&6樱花木"
+  CHISELED_BOOKSHELF:
+    price: 0.15
+    daily-limit: 800
+    name: "&6雕纹书架"
+  CRIMSON_HYPHAE:
+    price: 0.10
+    daily-limit: 800
+    name: "&c绯红菌核"
+  CRIMSON_PLANKS:
+    price: 0.02
+    daily-limit: 800
+    name: "&c绯红木板"
+  CRIMSON_SHELF:
+    price: 0.08
+    daily-limit: 800
+    name: "&c绯红木展示架"
+  CRIMSON_STEM:
+    price: 0.08
+    daily-limit: 800
+    name: "&c绯红菌柄"
+  DARK_OAK_LEAVES:
+    price: 0.08
+    daily-limit: 800
+    name: "&6深色橡树树叶"
+  DARK_OAK_LOG:
+    price: 0.08
+    daily-limit: 800
+    name: "&6深色橡木原木"
+  DARK_OAK_PLANKS:
+    price: 0.02
+    daily-limit: 800
+    name: "&6深色橡木木板"
+  DARK_OAK_SAPLING:
+    price: 0.08
+    daily-limit: 800
+    name: "&6深色橡树树苗"
+  DARK_OAK_SHELF:
+    price: 0.08
+    daily-limit: 800
+    name: "&6深色橡木展示架"
+  DARK_OAK_WOOD:
+    price: 0.10
+    daily-limit: 800
+    name: "&6深色橡木"
+  FLOWERING_AZALEA_LEAVES:
+    price: 0.08
+    daily-limit: 800
+    name: "&6盛开的杜鹃树叶"
+  JUNGLE_LEAVES:
+    price: 0.08
+    daily-limit: 800
+    name: "&6丛林树叶"
+  JUNGLE_LOG:
+    price: 0.08
+    daily-limit: 800
+    name: "&6丛林原木"
+  JUNGLE_PLANKS:
+    price: 0.02
+    daily-limit: 800
+    name: "&6丛林木板"
+  JUNGLE_SAPLING:
+    price: 0.08
+    daily-limit: 800
+    name: "&6丛林树苗"
+  JUNGLE_SHELF:
+    price: 0.08
+    daily-limit: 800
+    name: "&6丛林木展示架"
+  JUNGLE_WOOD:
+    price: 0.10
+    daily-limit: 800
+    name: "&6丛林木"
+  MANGROVE_LEAVES:
+    price: 0.08
+    daily-limit: 800
+    name: "&6红树树叶"
+  MANGROVE_LOG:
+    price: 0.08
+    daily-limit: 800
+    name: "&6红树原木"
+  MANGROVE_PLANKS:
+    price: 0.02
+    daily-limit: 800
+    name: "&6红树木板"
+  MANGROVE_SHELF:
+    price: 0.08
+    daily-limit: 800
+    name: "&6红树木展示架"
+  MANGROVE_WOOD:
+    price: 0.10
+    daily-limit: 800
+    name: "&6红树木"
+  MUSHROOM_STEM:
+    price: 0.08
+    daily-limit: 800
+    name: "&6蘑菇柄"
+  OAK_LEAVES:
+    price: 0.08
+    daily-limit: 800
+    name: "&6橡树树叶"
+  OAK_LOG:
+    price: 0.08
+    daily-limit: 800
+    name: "&6橡木原木"
+  OAK_PLANKS:
+    price: 0.02
+    daily-limit: 800
+    name: "&6橡木木板"
+  OAK_SAPLING:
+    price: 0.08
+    daily-limit: 800
+    name: "&6橡树树苗"
+  OAK_SHELF:
+    price: 0.08
+    daily-limit: 800
+    name: "&6橡木展示架"
+  OAK_WOOD:
+    price: 0.10
+    daily-limit: 800
+    name: "&6橡木"
+  PALE_OAK_LEAVES:
+    price: 0.08
+    daily-limit: 800
+    name: "&6苍白橡树树叶"
+  PALE_OAK_LOG:
+    price: 0.08
+    daily-limit: 800
+    name: "&6苍白橡木原木"
+  PALE_OAK_PLANKS:
+    price: 0.02
+    daily-limit: 800
+    name: "&6苍白橡木木板"
+  PALE_OAK_SAPLING:
+    price: 0.08
+    daily-limit: 800
+    name: "&6苍白橡树树苗"
+  PALE_OAK_SHELF:
+    price: 0.08
+    daily-limit: 800
+    name: "&6苍白橡木展示架"
+  PALE_OAK_WOOD:
+    price: 0.10
+    daily-limit: 800
+    name: "&6苍白橡木"
+  SPRUCE_LEAVES:
+    price: 0.08
+    daily-limit: 800
+    name: "&6云杉树叶"
+  SPRUCE_LOG:
+    price: 0.08
+    daily-limit: 800
+    name: "&6云杉原木"
+  SPRUCE_PLANKS:
+    price: 0.02
+    daily-limit: 800
+    name: "&6云杉木板"
+  SPRUCE_SAPLING:
+    price: 0.08
+    daily-limit: 800
+    name: "&6云杉树苗"
+  SPRUCE_SHELF:
+    price: 0.08
+    daily-limit: 800
+    name: "&6云杉木展示架"
+  SPRUCE_WOOD:
+    price: 0.10
+    daily-limit: 800
+    name: "&6云杉木"
+  STRIPPED_ACACIA_LOG:
+    price: 0.08
+    daily-limit: 800
+    name: "&6去皮金合欢原木"
+  STRIPPED_ACACIA_WOOD:
+    price: 0.10
+    daily-limit: 800
+    name: "&6去皮金合欢木"
+  STRIPPED_BAMBOO_BLOCK:
+    price: 0.08
+    daily-limit: 800
+    name: "&6去皮竹块"
+  STRIPPED_BIRCH_LOG:
+    price: 0.08
+    daily-limit: 800
+    name: "&6去皮白桦原木"
+  STRIPPED_BIRCH_WOOD:
+    price: 0.10
+    daily-limit: 800
+    name: "&6去皮白桦木"
+  STRIPPED_CHERRY_LOG:
+    price: 0.08
+    daily-limit: 800
+    name: "&6去皮樱花原木"
+  STRIPPED_CHERRY_WOOD:
+    price: 0.10
+    daily-limit: 800
+    name: "&6去皮樱花木"
+  STRIPPED_CRIMSON_HYPHAE:
+    price: 0.10
+    daily-limit: 800
+    name: "&c去皮绯红菌核"
+  STRIPPED_CRIMSON_STEM:
+    price: 0.08
+    daily-limit: 800
+    name: "&c去皮绯红菌柄"
+  STRIPPED_DARK_OAK_LOG:
+    price: 0.08
+    daily-limit: 800
+    name: "&6去皮深色橡木原木"
+  STRIPPED_DARK_OAK_WOOD:
+    price: 0.10
+    daily-limit: 800
+    name: "&6去皮深色橡木"
+  STRIPPED_JUNGLE_LOG:
+    price: 0.08
+    daily-limit: 800
+    name: "&6去皮丛林原木"
+  STRIPPED_JUNGLE_WOOD:
+    price: 0.10
+    daily-limit: 800
+    name: "&6去皮丛林木"
+  STRIPPED_MANGROVE_LOG:
+    price: 0.08
+    daily-limit: 800
+    name: "&6去皮红树原木"
+  STRIPPED_MANGROVE_WOOD:
+    price: 0.10
+    daily-limit: 800
+    name: "&6去皮红树木"
+  STRIPPED_OAK_LOG:
+    price: 0.08
+    daily-limit: 800
+    name: "&6去皮橡木原木"
+  STRIPPED_OAK_WOOD:
+    price: 0.10
+    daily-limit: 800
+    name: "&6去皮橡木"
+  STRIPPED_PALE_OAK_LOG:
+    price: 0.08
+    daily-limit: 800
+    name: "&6去皮苍白橡木原木"
+  STRIPPED_PALE_OAK_WOOD:
+    price: 0.10
+    daily-limit: 800
+    name: "&6去皮苍白橡木"
+  STRIPPED_SPRUCE_LOG:
+    price: 0.08
+    daily-limit: 800
+    name: "&6去皮云杉原木"
+  STRIPPED_SPRUCE_WOOD:
+    price: 0.10
+    daily-limit: 800
+    name: "&6去皮云杉木"
+  STRIPPED_WARPED_HYPHAE:
+    price: 0.10
+    daily-limit: 800
+    name: "&3去皮诡异菌核"
+  STRIPPED_WARPED_STEM:
+    price: 0.08
+    daily-limit: 800
+    name: "&3去皮诡异菌柄"
+  WARPED_HYPHAE:
+    price: 0.10
+    daily-limit: 800
+    name: "&3诡异菌核"
+  WARPED_PLANKS:
+    price: 0.02
+    daily-limit: 800
+    name: "&3诡异木板"
+  WARPED_SHELF:
+    price: 0.08
+    daily-limit: 800
+    name: "&3诡异木展示架"
+  WARPED_STEM:
+    price: 0.08
+    daily-limit: 800
+    name: "&3诡异菌柄"
+
+  # ================= 石材与建筑方块 =================
+  ACACIA_SLAB:
+    price: 0.01
+    daily-limit: 2500
+    name: "&f金合欢木台阶"
+  ACACIA_STAIRS:
+    price: 0.03
+    daily-limit: 2500
+    name: "&f金合欢木楼梯"
+  ANDESITE:
+    price: 0.33
+    daily-limit: 2500
+    name: "&f安山岩"
+  ANDESITE_SLAB:
+    price: 0.16
+    daily-limit: 2500
+    name: "&f安山岩台阶"
+  ANDESITE_STAIRS:
+    price: 0.33
+    daily-limit: 2500
+    name: "&f安山岩楼梯"
+  ANDESITE_WALL:
+    price: 0.33
+    daily-limit: 2500
+    name: "&f安山岩墙"
+  BASALT:
+    price: 0.01
+    daily-limit: 5000
+    name: "&f玄武岩"
+  BIRCH_SLAB:
+    price: 0.01
+    daily-limit: 2500
+    name: "&f白桦木台阶"
+  BIRCH_STAIRS:
+    price: 0.03
+    daily-limit: 2500
+    name: "&f白桦木楼梯"
+  BLACKSTONE:
+    price: 0.08
+    daily-limit: 5000
+    name: "&f黑石"
+  BLACKSTONE_SLAB:
+    price: 0.04
+    daily-limit: 2500
+    name: "&f黑石台阶"
+  BLACKSTONE_STAIRS:
+    price: 0.08
+    daily-limit: 2500
+    name: "&f黑石楼梯"
+  BLACKSTONE_WALL:
+    price: 0.08
+    daily-limit: 2500
+    name: "&f黑石墙"
+  BRICK:
+    price: 0.01
+    daily-limit: 2500
+    name: "&f红砖"
+  BRICK_SLAB:
+    price: 0.02
+    daily-limit: 2500
+    name: "&f红砖台阶"
+  BRICK_STAIRS:
+    price: 0.04
+    daily-limit: 2500
+    name: "&f红砖楼梯"
+  BRICK_WALL:
+    price: 0.04
+    daily-limit: 2500
+    name: "&f红砖墙"
+  BRICKS:
+    price: 0.04
+    daily-limit: 2500
+    name: "&f红砖块"
+  CHERRY_SLAB:
+    price: 0.01
+    daily-limit: 2500
+    name: "&f樱花木台阶"
+  CHERRY_STAIRS:
+    price: 0.03
+    daily-limit: 2500
+    name: "&f樱花木楼梯"
+  CHISELED_DEEPSLATE:
+    price: 0.08
+    daily-limit: 2500
+    name: "&f雕纹深板岩"
+  CHISELED_NETHER_BRICKS:
+    price: 0.04
+    daily-limit: 2500
+    name: "&f雕纹下界砖块"
+  CHISELED_POLISHED_BLACKSTONE:
+    price: 0.08
+    daily-limit: 2500
+    name: "&f雕纹磨制黑石"
+  CHISELED_RED_SANDSTONE:
+    price: 0.16
+    daily-limit: 2500
+    name: "&c雕纹红砂岩"
+  CHISELED_SANDSTONE:
+    price: 0.16
+    daily-limit: 2500
+    name: "&f雕纹砂岩"
+  CHISELED_STONE_BRICKS:
+    price: 0.08
+    daily-limit: 2500
+    name: "&f雕纹石砖"
+  CHISELED_TUFF:
+    price: 0.02
+    daily-limit: 2500
+    name: "&f雕纹凝灰岩"
+  CHISELED_TUFF_BRICKS:
+    price: 0.02
+    daily-limit: 2500
+    name: "&f雕纹凝灰岩砖"
+  CINNABAR_BRICK_SLAB:
+    price: 0.05
+    daily-limit: 2500
+    name: "&f朱砂砖台阶"
+  CINNABAR_BRICK_STAIRS:
+    price: 0.10
+    daily-limit: 2500
+    name: "&f朱砂砖楼梯"
+  CINNABAR_BRICK_WALL:
+    price: 0.10
+    daily-limit: 2500
+    name: "&f朱砂砖墙"
+  CINNABAR_BRICKS:
+    price: 0.10
+    daily-limit: 2500
+    name: "&f朱砂砖"
+  CINNABAR_SLAB:
+    price: 0.05
+    daily-limit: 2500
+    name: "&f朱砂台阶"
+  CINNABAR_STAIRS:
+    price: 0.10
+    daily-limit: 2500
+    name: "&f朱砂楼梯"
+  CINNABAR_WALL:
+    price: 0.10
+    daily-limit: 2500
+    name: "&f朱砂墙"
+  COBBLED_DEEPSLATE:
+    price: 0.08
+    daily-limit: 5000
+    name: "&f深板岩圆石"
+  COBBLED_DEEPSLATE_SLAB:
+    price: 0.04
+    daily-limit: 2500
+    name: "&f深板岩圆石台阶"
+  COBBLED_DEEPSLATE_STAIRS:
+    price: 0.08
+    daily-limit: 2500
+    name: "&f深板岩圆石楼梯"
+  COBBLED_DEEPSLATE_WALL:
+    price: 0.08
+    daily-limit: 2500
+    name: "&f深板岩圆石墙"
+  COBBLESTONE:
+    price: 0.08
+    daily-limit: 5000
+    name: "&f圆石"
+  COBBLESTONE_SLAB:
+    price: 0.04
+    daily-limit: 2500
+    name: "&f圆石台阶"
+  COBBLESTONE_STAIRS:
+    price: 0.08
+    daily-limit: 2500
+    name: "&f圆石楼梯"
+  COBBLESTONE_WALL:
+    price: 0.08
+    daily-limit: 2500
+    name: "&f圆石墙"
+  CRACKED_DEEPSLATE_BRICKS:
+    price: 0.08
+    daily-limit: 2500
+    name: "&f裂纹深板岩砖"
+  CRACKED_DEEPSLATE_TILES:
+    price: 0.08
+    daily-limit: 2500
+    name: "&f裂纹深板岩瓦"
+  CRACKED_NETHER_BRICKS:
+    price: 0.04
+    daily-limit: 2500
+    name: "&f裂纹下界砖块"
+  CRACKED_POLISHED_BLACKSTONE_BRICKS:
+    price: 0.08
+    daily-limit: 2500
+    name: "&f裂纹磨制黑石砖"
+  CRACKED_STONE_BRICKS:
+    price: 0.08
+    daily-limit: 2500
+    name: "&f裂纹石砖"
+  CRIMSON_SLAB:
+    price: 0.01
+    daily-limit: 2500
+    name: "&c绯红木台阶"
+  CRIMSON_STAIRS:
+    price: 0.03
+    daily-limit: 2500
+    name: "&c绯红木楼梯"
+  CUT_RED_SANDSTONE:
+    price: 0.16
+    daily-limit: 2500
+    name: "&c切制红砂岩"
+  CUT_RED_SANDSTONE_SLAB:
+    price: 0.08
+    daily-limit: 2500
+    name: "&c切制红砂岩台阶"
+  CUT_SANDSTONE:
+    price: 0.16
+    daily-limit: 2500
+    name: "&f切制砂岩"
+  CUT_SANDSTONE_SLAB:
+    price: 0.08
+    daily-limit: 2500
+    name: "&f切制砂岩台阶"
+  DARK_OAK_SLAB:
+    price: 0.01
+    daily-limit: 2500
+    name: "&f深色橡木台阶"
+  DARK_OAK_STAIRS:
+    price: 0.03
+    daily-limit: 2500
+    name: "&f深色橡木楼梯"
+  DARK_PRISMARINE:
+    price: 0.86
+    daily-limit: 2500
+    name: "&3暗海晶石"
+  DARK_PRISMARINE_SLAB:
+    price: 0.43
+    daily-limit: 2500
+    name: "&3暗海晶石台阶"
+  DARK_PRISMARINE_STAIRS:
+    price: 0.86
+    daily-limit: 2500
+    name: "&3暗海晶石楼梯"
+  DEEPSLATE:
+    price: 0.08
+    daily-limit: 2500
+    name: "&f深板岩"
+  DEEPSLATE_BRICK_SLAB:
+    price: 0.04
+    daily-limit: 2500
+    name: "&f深板岩砖台阶"
+  DEEPSLATE_BRICK_STAIRS:
+    price: 0.08
+    daily-limit: 2500
+    name: "&f深板岩砖楼梯"
+  DEEPSLATE_BRICK_WALL:
+    price: 0.08
+    daily-limit: 2500
+    name: "&f深板岩砖墙"
+  DEEPSLATE_BRICKS:
+    price: 0.08
+    daily-limit: 2500
+    name: "&f深板岩砖"
+  DEEPSLATE_TILE_SLAB:
+    price: 0.04
+    daily-limit: 2500
+    name: "&f深板岩瓦台阶"
+  DEEPSLATE_TILE_STAIRS:
+    price: 0.08
+    daily-limit: 2500
+    name: "&f深板岩瓦楼梯"
+  DEEPSLATE_TILE_WALL:
+    price: 0.08
+    daily-limit: 2500
+    name: "&f深板岩瓦墙"
+  DEEPSLATE_TILES:
+    price: 0.08
+    daily-limit: 2500
+    name: "&f深板岩瓦"
+  DIORITE:
+    price: 0.58
+    daily-limit: 2500
+    name: "&f闪长岩"
+  DIORITE_SLAB:
+    price: 0.29
+    daily-limit: 2500
+    name: "&f闪长岩台阶"
+  DIORITE_STAIRS:
+    price: 0.58
+    daily-limit: 2500
+    name: "&f闪长岩楼梯"
+  DIORITE_WALL:
+    price: 0.58
+    daily-limit: 2500
+    name: "&f闪长岩墙"
+  DRIPSTONE_BLOCK:
+    price: 0.08
+    daily-limit: 2500
+    name: "&f滴水石块"
+  END_STONE:
+    price: 0.02
+    daily-limit: 5000
+    name: "&f末地石"
+  END_STONE_BRICK_SLAB:
+    price: 0.01
+    daily-limit: 2500
+    name: "&f末地石砖台阶"
+  END_STONE_BRICK_STAIRS:
+    price: 0.02
+    daily-limit: 2500
+    name: "&f末地石砖楼梯"
+  END_STONE_BRICK_WALL:
+    price: 0.02
+    daily-limit: 2500
+    name: "&f末地石砖墙"
+  END_STONE_BRICKS:
+    price: 0.02
+    daily-limit: 2500
+    name: "&f末地石砖"
+  GILDED_BLACKSTONE:
+    price: 2.00
+    daily-limit: 2500
+    name: "&f镶金黑石"
+  GLOWSTONE:
+    price: 0.08
+    daily-limit: 2500
+    name: "&f荧石"
+  GLOWSTONE_DUST:
+    price: 0.02
+    daily-limit: 2500
+    name: "&f荧石粉"
+  GRANITE:
+    price: 1.08
+    daily-limit: 2500
+    name: "&f花岗岩"
+  GRANITE_SLAB:
+    price: 0.54
+    daily-limit: 2500
+    name: "&f花岗岩台阶"
+  GRANITE_STAIRS:
+    price: 1.08
+    daily-limit: 2500
+    name: "&f花岗岩楼梯"
+  GRANITE_WALL:
+    price: 1.08
+    daily-limit: 2500
+    name: "&f花岗岩墙"
+  GRINDSTONE:
+    price: 0.10
+    daily-limit: 2500
+    name: "&f砂轮"
+  JUNGLE_SLAB:
+    price: 0.01
+    daily-limit: 2500
+    name: "&f丛林木台阶"
+  JUNGLE_STAIRS:
+    price: 0.03
+    daily-limit: 2500
+    name: "&f丛林木楼梯"
+  LODESTONE:
+    price: 1.36
+    daily-limit: 2500
+    name: "&f磁石"
+  MANGROVE_SLAB:
+    price: 0.01
+    daily-limit: 2500
+    name: "&f红树木台阶"
+  MANGROVE_STAIRS:
+    price: 0.03
+    daily-limit: 2500
+    name: "&f红树木楼梯"
+  MOSSY_COBBLESTONE:
+    price: 0.10
+    daily-limit: 2500
+    name: "&f苔石"
+  MOSSY_COBBLESTONE_SLAB:
+    price: 0.05
+    daily-limit: 2500
+    name: "&f苔石台阶"
+  MOSSY_COBBLESTONE_STAIRS:
+    price: 0.10
+    daily-limit: 2500
+    name: "&f苔石楼梯"
+  MOSSY_COBBLESTONE_WALL:
+    price: 0.10
+    daily-limit: 2500
+    name: "&f苔石墙"
+  MOSSY_STONE_BRICK_SLAB:
+    price: 0.05
+    daily-limit: 2500
+    name: "&f苔石砖台阶"
+  MOSSY_STONE_BRICK_STAIRS:
+    price: 0.10
+    daily-limit: 2500
+    name: "&f苔石砖楼梯"
+  MOSSY_STONE_BRICK_WALL:
+    price: 0.10
+    daily-limit: 2500
+    name: "&f苔石砖墙"
+  MOSSY_STONE_BRICKS:
+    price: 0.10
+    daily-limit: 2500
+    name: "&f苔石砖"
+  MUD_BRICK_SLAB:
+    price: 0.03
+    daily-limit: 2500
+    name: "&f泥砖台阶"
+  MUD_BRICK_STAIRS:
+    price: 0.07
+    daily-limit: 2500
+    name: "&f泥砖楼梯"
+  MUD_BRICK_WALL:
+    price: 0.07
+    daily-limit: 2500
+    name: "&f泥砖墙"
+  MUD_BRICKS:
+    price: 0.07
+    daily-limit: 2500
+    name: "&f泥砖"
+  NETHER_BRICK:
+    price: 0.01
+    daily-limit: 2500
+    name: "&f下界砖"
+  NETHER_BRICK_FENCE:
+    price: 0.03
+    daily-limit: 2500
+    name: "&f下界砖栅栏"
+  NETHER_BRICK_SLAB:
+    price: 0.02
+    daily-limit: 2500
+    name: "&f下界砖台阶"
+  NETHER_BRICK_STAIRS:
+    price: 0.04
+    daily-limit: 2500
+    name: "&f下界砖楼梯"
+  NETHER_BRICK_WALL:
+    price: 0.04
+    daily-limit: 2500
+    name: "&f下界砖墙"
+  NETHER_BRICKS:
+    price: 0.04
+    daily-limit: 2500
+    name: "&f下界砖块"
+  OAK_SLAB:
+    price: 0.01
+    daily-limit: 2500
+    name: "&f橡木台阶"
+  OAK_STAIRS:
+    price: 0.03
+    daily-limit: 2500
+    name: "&f橡木楼梯"
+  PALE_OAK_SLAB:
+    price: 0.01
+    daily-limit: 2500
+    name: "&f苍白橡木台阶"
+  PALE_OAK_STAIRS:
+    price: 0.03
+    daily-limit: 2500
+    name: "&f苍白橡木楼梯"
+  PETRIFIED_OAK_SLAB:
+    price: 0.02
+    daily-limit: 2500
+    name: "&f石化橡木台阶"
+  POINTED_DRIPSTONE:
+    price: 0.02
+    daily-limit: 2500
+    name: "&f滴水石锥"
+  POLISHED_ANDESITE:
+    price: 0.33
+    daily-limit: 2500
+    name: "&f磨制安山岩"
+  POLISHED_ANDESITE_SLAB:
+    price: 0.16
+    daily-limit: 2500
+    name: "&f磨制安山岩台阶"
+  POLISHED_ANDESITE_STAIRS:
+    price: 0.33
+    daily-limit: 2500
+    name: "&f磨制安山岩楼梯"
+  POLISHED_BASALT:
+    price: 0.01
+    daily-limit: 2500
+    name: "&f磨制玄武岩"
+  POLISHED_BLACKSTONE:
+    price: 0.08
+    daily-limit: 2500
+    name: "&f磨制黑石"
+  POLISHED_BLACKSTONE_BRICK_SLAB:
+    price: 0.04
+    daily-limit: 2500
+    name: "&f磨制黑石砖台阶"
+  POLISHED_BLACKSTONE_BRICK_STAIRS:
+    price: 0.08
+    daily-limit: 2500
+    name: "&f磨制黑石砖楼梯"
+  POLISHED_BLACKSTONE_BRICK_WALL:
+    price: 0.08
+    daily-limit: 2500
+    name: "&f磨制黑石砖墙"
+  POLISHED_BLACKSTONE_BRICKS:
+    price: 0.08
+    daily-limit: 2500
+    name: "&f磨制黑石砖"
+  POLISHED_BLACKSTONE_SLAB:
+    price: 0.04
+    daily-limit: 2500
+    name: "&f磨制黑石台阶"
+  POLISHED_BLACKSTONE_STAIRS:
+    price: 0.08
+    daily-limit: 2500
+    name: "&f磨制黑石楼梯"
+  POLISHED_BLACKSTONE_WALL:
+    price: 0.08
+    daily-limit: 2500
+    name: "&f磨制黑石墙"
+  POLISHED_CINNABAR_SLAB:
+    price: 0.05
+    daily-limit: 2500
+    name: "&f磨制朱砂台阶"
+  POLISHED_CINNABAR_STAIRS:
+    price: 0.10
+    daily-limit: 2500
+    name: "&f磨制朱砂楼梯"
+  POLISHED_CINNABAR_WALL:
+    price: 0.10
+    daily-limit: 2500
+    name: "&f磨制朱砂墙"
+  POLISHED_DEEPSLATE:
+    price: 0.08
+    daily-limit: 2500
+    name: "&f磨制深板岩"
+  POLISHED_DEEPSLATE_SLAB:
+    price: 0.04
+    daily-limit: 2500
+    name: "&f磨制深板岩台阶"
+  POLISHED_DEEPSLATE_STAIRS:
+    price: 0.08
+    daily-limit: 2500
+    name: "&f磨制深板岩楼梯"
+  POLISHED_DEEPSLATE_WALL:
+    price: 0.08
+    daily-limit: 2500
+    name: "&f磨制深板岩墙"
+  POLISHED_DIORITE:
+    price: 0.58
+    daily-limit: 2500
+    name: "&f磨制闪长岩"
+  POLISHED_DIORITE_SLAB:
+    price: 0.29
+    daily-limit: 2500
+    name: "&f磨制闪长岩台阶"
+  POLISHED_DIORITE_STAIRS:
+    price: 0.58
+    daily-limit: 2500
+    name: "&f磨制闪长岩楼梯"
+  POLISHED_GRANITE:
+    price: 1.08
+    daily-limit: 2500
+    name: "&f磨制花岗岩"
+  POLISHED_GRANITE_SLAB:
+    price: 0.54
+    daily-limit: 2500
+    name: "&f磨制花岗岩台阶"
+  POLISHED_GRANITE_STAIRS:
+    price: 1.08
+    daily-limit: 2500
+    name: "&f磨制花岗岩楼梯"
+  POLISHED_SULFUR_SLAB:
+    price: 0.20
+    daily-limit: 2500
+    name: "&f磨制硫黄台阶"
+  POLISHED_SULFUR_STAIRS:
+    price: 0.40
+    daily-limit: 2500
+    name: "&f磨制硫黄楼梯"
+  POLISHED_SULFUR_WALL:
+    price: 0.40
+    daily-limit: 2500
+    name: "&f磨制硫黄墙"
+  POLISHED_TUFF:
+    price: 0.02
+    daily-limit: 2500
+    name: "&f磨制凝灰岩"
+  POLISHED_TUFF_SLAB:
+    price: 0.01
+    daily-limit: 2500
+    name: "&f磨制凝灰岩台阶"
+  POLISHED_TUFF_STAIRS:
+    price: 0.02
+    daily-limit: 2500
+    name: "&f磨制凝灰岩楼梯"
+  POLISHED_TUFF_WALL:
+    price: 0.02
+    daily-limit: 2500
+    name: "&f磨制凝灰岩墙"
+  PRISMARINE:
+    price: 0.40
+    daily-limit: 2500
+    name: "&3海晶石"
+  PRISMARINE_BRICK_SLAB:
+    price: 0.45
+    daily-limit: 2500
+    name: "&3海晶石砖台阶"
+  PRISMARINE_BRICK_STAIRS:
+    price: 0.90
+    daily-limit: 2500
+    name: "&3海晶石砖楼梯"
+  PRISMARINE_BRICKS:
+    price: 0.90
+    daily-limit: 2500
+    name: "&3海晶石砖"
+  PRISMARINE_CRYSTALS:
+    price: 0.16
+    daily-limit: 300
+    name: "&3海晶砂粒"
+  PRISMARINE_SHARD:
+    price: 0.10
+    daily-limit: 500
+    name: "&3海晶碎片"
+  PRISMARINE_SLAB:
+    price: 0.20
+    daily-limit: 2500
+    name: "&3海晶石台阶"
+  PRISMARINE_STAIRS:
+    price: 0.40
+    daily-limit: 2500
+    name: "&3海晶石楼梯"
+  PRISMARINE_WALL:
+    price: 0.40
+    daily-limit: 2500
+    name: "&3海晶石墙"
+  PURPUR_BLOCK:
+    price: 0.10
+    daily-limit: 2500
+    name: "&f紫珀块"
+  PURPUR_PILLAR:
+    price: 0.10
+    daily-limit: 2500
+    name: "&f紫珀柱"
+  PURPUR_SLAB:
+    price: 0.05
+    daily-limit: 2500
+    name: "&f紫珀台阶"
+  PURPUR_STAIRS:
+    price: 0.10
+    daily-limit: 2500
+    name: "&f紫珀楼梯"
+  RED_NETHER_BRICK_SLAB:
+    price: 0.09
+    daily-limit: 2500
+    name: "&c红色下界砖台阶"
+  RED_NETHER_BRICK_STAIRS:
+    price: 0.18
+    daily-limit: 2500
+    name: "&c红色下界砖楼梯"
+  RED_NETHER_BRICK_WALL:
+    price: 0.18
+    daily-limit: 2500
+    name: "&c红色下界砖墙"
+  RED_NETHER_BRICKS:
+    price: 0.18
+    daily-limit: 2500
+    name: "&c红色下界砖块"
+  RED_SANDSTONE:
+    price: 0.16
+    daily-limit: 2500
+    name: "&c红砂岩"
+  RED_SANDSTONE_SLAB:
+    price: 0.08
+    daily-limit: 2500
+    name: "&c红砂岩台阶"
+  RED_SANDSTONE_STAIRS:
+    price: 0.16
+    daily-limit: 2500
+    name: "&c红砂岩楼梯"
+  RED_SANDSTONE_WALL:
+    price: 0.16
+    daily-limit: 2500
+    name: "&c红砂岩墙"
+  SANDSTONE:
+    price: 0.16
+    daily-limit: 2500
+    name: "&f砂岩"
+  SANDSTONE_SLAB:
+    price: 0.08
+    daily-limit: 2500
+    name: "&f砂岩台阶"
+  SANDSTONE_STAIRS:
+    price: 0.16
+    daily-limit: 2500
+    name: "&f砂岩楼梯"
+  SANDSTONE_WALL:
+    price: 0.16
+    daily-limit: 2500
+    name: "&f砂岩墙"
+  SMOOTH_BASALT:
+    price: 0.01
+    daily-limit: 2500
+    name: "&f平滑玄武岩"
+  SMOOTH_RED_SANDSTONE:
+    price: 0.16
+    daily-limit: 2500
+    name: "&c平滑红砂岩"
+  SMOOTH_RED_SANDSTONE_SLAB:
+    price: 0.08
+    daily-limit: 2500
+    name: "&c平滑红砂岩台阶"
+  SMOOTH_RED_SANDSTONE_STAIRS:
+    price: 0.16
+    daily-limit: 2500
+    name: "&c平滑红砂岩楼梯"
+  SMOOTH_SANDSTONE:
+    price: 0.16
+    daily-limit: 2500
+    name: "&f平滑砂岩"
+  SMOOTH_SANDSTONE_SLAB:
+    price: 0.08
+    daily-limit: 2500
+    name: "&f平滑砂岩台阶"
+  SMOOTH_SANDSTONE_STAIRS:
+    price: 0.16
+    daily-limit: 2500
+    name: "&f平滑砂岩楼梯"
+  SMOOTH_STONE:
+    price: 0.08
+    daily-limit: 2500
+    name: "&f平滑石头"
+  SMOOTH_STONE_SLAB:
+    price: 0.04
+    daily-limit: 2500
+    name: "&f平滑石头台阶"
+  SPRUCE_SLAB:
+    price: 0.01
+    daily-limit: 2500
+    name: "&f云杉木台阶"
+  SPRUCE_STAIRS:
+    price: 0.03
+    daily-limit: 2500
+    name: "&f云杉木楼梯"
+  STONE:
+    price: 0.08
+    daily-limit: 5000
+    name: "&f石头"
+  STONE_BRICK_SLAB:
+    price: 0.04
+    daily-limit: 2500
+    name: "&f石砖台阶"
+  STONE_BRICK_STAIRS:
+    price: 0.08
+    daily-limit: 2500
+    name: "&f石砖楼梯"
+  STONE_BRICK_WALL:
+    price: 0.08
+    daily-limit: 2500
+    name: "&f石砖墙"
+  STONE_BRICKS:
+    price: 0.08
+    daily-limit: 2500
+    name: "&f石砖"
+  STONE_SLAB:
+    price: 0.04
+    daily-limit: 2500
+    name: "&f石头台阶"
+  STONE_STAIRS:
+    price: 0.08
+    daily-limit: 2500
+    name: "&f石头楼梯"
+  STONECUTTER:
+    price: 0.96
+    daily-limit: 2500
+    name: "&f切石机"
+  SULFUR_BRICK_SLAB:
+    price: 0.20
+    daily-limit: 2500
+    name: "&f硫黄砖台阶"
+  SULFUR_BRICK_STAIRS:
+    price: 0.40
+    daily-limit: 2500
+    name: "&f硫黄砖楼梯"
+  SULFUR_BRICK_WALL:
+    price: 0.40
+    daily-limit: 2500
+    name: "&f硫黄砖墙"
+  SULFUR_BRICKS:
+    price: 0.40
+    daily-limit: 2500
+    name: "&f硫黄砖"
+  SULFUR_SLAB:
+    price: 0.20
+    daily-limit: 2500
+    name: "&f硫黄台阶"
+  SULFUR_STAIRS:
+    price: 0.40
+    daily-limit: 2500
+    name: "&f硫黄楼梯"
+  SULFUR_WALL:
+    price: 0.40
+    daily-limit: 2500
+    name: "&f硫黄墙"
+  TUFF:
+    price: 0.02
+    daily-limit: 2500
+    name: "&f凝灰岩"
+  TUFF_BRICK_SLAB:
+    price: 0.01
+    daily-limit: 2500
+    name: "&f凝灰岩砖台阶"
+  TUFF_BRICK_STAIRS:
+    price: 0.02
+    daily-limit: 2500
+    name: "&f凝灰岩砖楼梯"
+  TUFF_BRICK_WALL:
+    price: 0.02
+    daily-limit: 2500
+    name: "&f凝灰岩砖墙"
+  TUFF_BRICKS:
+    price: 0.02
+    daily-limit: 2500
+    name: "&f凝灰岩砖"
+  TUFF_SLAB:
+    price: 0.01
+    daily-limit: 2500
+    name: "&f凝灰岩台阶"
+  TUFF_STAIRS:
+    price: 0.02
+    daily-limit: 2500
+    name: "&f凝灰岩楼梯"
+  TUFF_WALL:
+    price: 0.02
+    daily-limit: 2500
+    name: "&f凝灰岩墙"
+  WARPED_SLAB:
+    price: 0.01
+    daily-limit: 2500
+    name: "&3诡异木台阶"
+  WARPED_STAIRS:
+    price: 0.03
+    daily-limit: 2500
+    name: "&3诡异木楼梯"
+
+  # ================= 泥土沙砾与自然方块 =================
+  BLUE_ICE:
+    price: 8.10
+    daily-limit: 250
+    name: "&3蓝冰"
+  CALIBRATED_SCULK_SENSOR:
+    price: 0.61
+    daily-limit: 5000
+    name: "&f校频幽匿感测体"
+  CLAY:
+    price: 0.04
+    daily-limit: 5000
+    name: "&f黏土"
+  CLAY_BALL:
+    price: 0.01
+    daily-limit: 5000
+    name: "&f黏土球"
+  COARSE_DIRT:
+    price: 0.01
+    daily-limit: 5000
+    name: "&f砂土"
+  CRIMSON_NYLIUM:
+    price: 0.01
+    daily-limit: 5000
+    name: "&c绯红菌岩"
+  CRYING_OBSIDIAN:
+    price: 1.00
+    daily-limit: 1000
+    name: "&f哭泣的黑曜石"
+  DIRT:
+    price: 0.01
+    daily-limit: 5000
+    name: "&f泥土"
+  DIRT_PATH:
+    price: 0.01
+    daily-limit: 5000
+    name: "&f土径"
+  GLISTERING_MELON_SLICE:
+    price: 0.82
+    daily-limit: 5000
+    name: "&f闪烁的西瓜片"
+  GRASS_BLOCK:
+    price: 0.01
+    daily-limit: 5000
+    name: "&f草方块"
+  GRAVEL:
+    price: 0.02
+    daily-limit: 2500
+    name: "&f沙砾"
+  ICE:
+    price: 0.10
+    daily-limit: 500
+    name: "&f冰"
+  MELON_SLICE:
+    price: 0.02
+    daily-limit: 2000
+    name: "&f西瓜片"
+  MOSS_BLOCK:
+    price: 0.02
+    daily-limit: 2500
+    name: "&f苔藓块"
+  MOSS_CARPET:
+    price: 0.01
+    daily-limit: 5000
+    name: "&f覆地苔藓"
+  MUD:
+    price: 0.01
+    daily-limit: 5000
+    name: "&f泥巴"
+  MUDDY_MANGROVE_ROOTS:
+    price: 0.05
+    daily-limit: 5000
+    name: "&f沾泥的红树根"
+  MUSIC_DISC_PRECIPICE:
+    price: 30.00
+    daily-limit: 5000
+    name: "&f音乐唱片"
+  NETHERRACK:
+    price: 0.01
+    daily-limit: 5000
+    name: "&f下界岩"
+  OBSIDIAN:
+    price: 0.50
+    daily-limit: 1000
+    name: "&f黑曜石"
+  PACKED_ICE:
+    price: 0.90
+    daily-limit: 250
+    name: "&f浮冰"
+  PACKED_MUD:
+    price: 0.07
+    daily-limit: 5000
+    name: "&f泥坯"
+  PALE_HANGING_MOSS:
+    price: 0.01
+    daily-limit: 5000
+    name: "&f苍白垂须"
+  PALE_MOSS_BLOCK:
+    price: 0.02
+    daily-limit: 5000
+    name: "&f苍白苔藓块"
+  PALE_MOSS_CARPET:
+    price: 0.01
+    daily-limit: 5000
+    name: "&f苍白覆地苔藓"
+  POWDER_SNOW_BUCKET:
+    price: 2.50
+    daily-limit: 5000
+    name: "&f细雪桶"
+  RED_SAND:
+    price: 0.04
+    daily-limit: 2500
+    name: "&c红沙"
+  ROOTED_DIRT:
+    price: 0.01
+    daily-limit: 5000
+    name: "&f缠根泥土"
+  SAND:
+    price: 0.04
+    daily-limit: 5000
+    name: "&f沙子"
+  SCULK:
+    price: 0.10
+    daily-limit: 500
+    name: "&f幽匿块"
+  SCULK_CATALYST:
+    price: 5.00
+    daily-limit: 128
+    name: "&f幽匿催发体"
+  SCULK_SENSOR:
+    price: 0.01
+    daily-limit: 5000
+    name: "&f幽匿感测体"
+  SCULK_SHRIEKER:
+    price: 5.00
+    daily-limit: 5000
+    name: "&f幽匿尖啸体"
+  SCULK_VEIN:
+    price: 0.01
+    daily-limit: 5000
+    name: "&f幽匿脉络"
+  SEAGRASS:
+    price: 0.01
+    daily-limit: 5000
+    name: "&f海草"
+  SHORT_DRY_GRASS:
+    price: 0.01
+    daily-limit: 5000
+    name: "&f矮枯草丛"
+  SHORT_GRASS:
+    price: 0.01
+    daily-limit: 5000
+    name: "&f矮草丛"
+  SNOW:
+    price: 0.02
+    daily-limit: 5000
+    name: "&f雪"
+  SNOW_BLOCK:
+    price: 0.04
+    daily-limit: 5000
+    name: "&f雪块"
+  SNOWBALL:
+    price: 0.01
+    daily-limit: 5000
+    name: "&f雪球"
+  SOUL_CAMPFIRE:
+    price: 0.28
+    daily-limit: 5000
+    name: "&f灵魂营火"
+  SOUL_LANTERN:
+    price: 0.66
+    daily-limit: 5000
+    name: "&f灵魂灯笼"
+  SOUL_SAND:
+    price: 0.01
+    daily-limit: 5000
+    name: "&f灵魂沙"
+  SOUL_SOIL:
+    price: 0.01
+    daily-limit: 5000
+    name: "&f灵魂土"
+  SOUL_TORCH:
+    price: 0.02
+    daily-limit: 5000
+    name: "&f灵魂火把"
+  TALL_DRY_GRASS:
+    price: 0.01
+    daily-limit: 5000
+    name: "&f高枯草丛"
+  TALL_GRASS:
+    price: 0.01
+    daily-limit: 5000
+    name: "&f高草丛"
+  WARPED_NYLIUM:
+    price: 0.01
+    daily-limit: 5000
+    name: "&3诡异菌岩"
+
+  # ================= 植物与花卉 =================
+  ALLIUM:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a绒球葱"
+  AZALEA:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a杜鹃花丛"
+  BLUE_ORCHID:
+    price: 0.04
+    daily-limit: 1000
+    name: "&3兰花"
+  BRAIN_CORAL:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a脑纹珊瑚"
+  BRAIN_CORAL_BLOCK:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a脑纹珊瑚块"
+  BRAIN_CORAL_FAN:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a脑纹珊瑚扇"
+  BROWN_MUSHROOM:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a棕色蘑菇"
+  BROWN_MUSHROOM_BLOCK:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a棕色蘑菇方块"
+  BUBBLE_CORAL:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a气泡珊瑚"
+  BUBBLE_CORAL_BLOCK:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a气泡珊瑚块"
+  BUBBLE_CORAL_FAN:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a气泡珊瑚扇"
+  BUSH:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a灌木丛"
+  CACTUS:
+    price: 0.06
+    daily-limit: 1000
+    name: "&a仙人掌"
+  CACTUS_FLOWER:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a仙人掌花"
+  CHORUS_FLOWER:
+    price: 1.00
+    daily-limit: 1000
+    name: "&a紫颂花"
+  COCOA_BEANS:
+    price: 0.06
+    daily-limit: 800
+    name: "&a可可豆"
+  CORNFLOWER:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a矢车菊"
+  CRIMSON_FUNGUS:
+    price: 0.04
+    daily-limit: 1000
+    name: "&c绯红菌"
+  CRIMSON_ROOTS:
+    price: 0.04
+    daily-limit: 1000
+    name: "&c绯红菌索"
+  DANDELION:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a蒲公英"
+  DEAD_BRAIN_CORAL:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a失活的脑纹珊瑚"
+  DEAD_BRAIN_CORAL_BLOCK:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a失活的脑纹珊瑚块"
+  DEAD_BRAIN_CORAL_FAN:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a失活的脑纹珊瑚扇"
+  DEAD_BUBBLE_CORAL:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a失活的气泡珊瑚"
+  DEAD_BUBBLE_CORAL_BLOCK:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a失活的气泡珊瑚块"
+  DEAD_BUBBLE_CORAL_FAN:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a失活的气泡珊瑚扇"
+  DEAD_BUSH:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a枯萎的灌木"
+  DEAD_FIRE_CORAL:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a失活的火珊瑚"
+  DEAD_FIRE_CORAL_BLOCK:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a失活的火珊瑚块"
+  DEAD_FIRE_CORAL_FAN:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a失活的火珊瑚扇"
+  DEAD_HORN_CORAL:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a失活的鹿角珊瑚"
+  DEAD_HORN_CORAL_BLOCK:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a失活的鹿角珊瑚块"
+  DEAD_HORN_CORAL_FAN:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a失活的鹿角珊瑚扇"
+  DEAD_TUBE_CORAL:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a失活的管珊瑚"
+  DEAD_TUBE_CORAL_BLOCK:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a失活的管珊瑚块"
+  DEAD_TUBE_CORAL_FAN:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a失活的管珊瑚扇"
+  DRIED_KELP:
+    price: 0.01
+    daily-limit: 1000
+    name: "&a干海带"
+  DRIED_KELP_BLOCK:
+    price: 0.09
+    daily-limit: 1000
+    name: "&a干海带块"
+  FERN:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a蕨"
+  FIRE_CORAL:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a火珊瑚"
+  FIRE_CORAL_BLOCK:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a火珊瑚块"
+  FIRE_CORAL_FAN:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a火珊瑚扇"
+  FIREFLY_BUSH:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a萤火虫灌木丛"
+  FLOWER_POT:
+    price: 0.03
+    daily-limit: 1000
+    name: "&a花盆"
+  FLOWERING_AZALEA:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a盛开的杜鹃花丛"
+  HANGING_ROOTS:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a垂根"
+  HORN_CORAL:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a鹿角珊瑚"
+  HORN_CORAL_BLOCK:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a鹿角珊瑚块"
+  HORN_CORAL_FAN:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a鹿角珊瑚扇"
+  KELP:
+    price: 0.01
+    daily-limit: 5000
+    name: "&a海带"
+  LARGE_FERN:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a大型蕨"
+  LILAC:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a丁香"
+  LILY_OF_THE_VALLEY:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a铃兰"
+  LILY_PAD:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a睡莲"
+  MANGROVE_DOOR:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a红树木门"
+  MANGROVE_FENCE:
+    price: 0.03
+    daily-limit: 1000
+    name: "&a红树木栅栏"
+  MANGROVE_FENCE_GATE:
+    price: 0.08
+    daily-limit: 1000
+    name: "&a红树木栅栏门"
+  MANGROVE_HANGING_SIGN:
+    price: 0.37
+    daily-limit: 1000
+    name: "&a悬挂式红树木告示牌"
+  MANGROVE_PROPAGULE:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a红树胎生苗"
+  MANGROVE_ROOTS:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a红树根"
+  MANGROVE_SIGN:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a红树木告示牌"
+  MANGROVE_TRAPDOOR:
+    price: 0.06
+    daily-limit: 1000
+    name: "&a红树木活板门"
+  MUSHROOM_STEW:
+    price: 0.09
+    daily-limit: 1000
+    name: "&a蘑菇煲"
+  ORANGE_TULIP:
+    price: 0.04
+    daily-limit: 1000
+    name: "&6橙色郁金香"
+  OXEYE_DAISY:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a滨菊"
+  PEONY:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a牡丹"
+  PINK_TULIP:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a粉红色郁金香"
+  PITCHER_PLANT:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a瓶子草"
+  PITCHER_POD:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a瓶子草荚果"
+  POPPY:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a虞美人"
+  RED_MUSHROOM:
+    price: 0.04
+    daily-limit: 1000
+    name: "&c红色蘑菇"
+  RED_MUSHROOM_BLOCK:
+    price: 0.04
+    daily-limit: 1000
+    name: "&c红色蘑菇方块"
+  RED_TULIP:
+    price: 0.04
+    daily-limit: 1000
+    name: "&c红色郁金香"
+  ROSE_BUSH:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a玫瑰丛"
+  SUNFLOWER:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a向日葵"
+  TORCHFLOWER:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a火把花"
+  TORCHFLOWER_SEEDS:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a火把花种子"
+  TUBE_CORAL:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a管珊瑚"
+  TUBE_CORAL_BLOCK:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a管珊瑚块"
+  TUBE_CORAL_FAN:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a管珊瑚扇"
+  TWISTING_VINES:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a缠怨藤"
+  VINE:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a藤蔓"
+  WARPED_FUNGUS:
+    price: 0.04
+    daily-limit: 1000
+    name: "&3诡异菌"
+  WARPED_ROOTS:
+    price: 0.04
+    daily-limit: 1000
+    name: "&3诡异菌索"
+  WEEPING_VINES:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a垂泪藤"
+  WHITE_TULIP:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a白色郁金香"
+  WILDFLOWERS:
+    price: 0.04
+    daily-limit: 1000
+    name: "&a野花簇"
+  WITHER_ROSE:
+    price: 2.00
+    daily-limit: 1000
+    name: "&a凋灵玫瑰"
+
+  # ================= 食物与农作物 =================
+  APPLE:
+    price: 0.20
+    daily-limit: 250
+    name: "&e苹果"
+  BAKED_POTATO:
+    price: 0.05
+    daily-limit: 1000
+    name: "&e烤马铃薯"
+  BEEF:
+    price: 0.05
+    daily-limit: 1000
+    name: "&e生牛肉"
+  BEETROOT:
+    price: 0.05
+    daily-limit: 1000
+    name: "&e甜菜根"
+  BEETROOT_SEEDS:
+    price: 0.05
+    daily-limit: 1000
+    name: "&e甜菜种子"
+  BEETROOT_SOUP:
+    price: 0.31
+    daily-limit: 1000
+    name: "&e甜菜汤"
+  BLUE_EGG:
+    price: 0.05
+    daily-limit: 1000
+    name: "&3蓝色鸡蛋"
+  BREAD:
+    price: 0.18
+    daily-limit: 1000
+    name: "&e面包"
+  BROWN_EGG:
+    price: 0.05
+    daily-limit: 1000
+    name: "&e棕色鸡蛋"
+  CAKE:
+    price: 0.61
+    daily-limit: 1000
+    name: "&e蛋糕"
+  CARROT:
+    price: 0.05
+    daily-limit: 1000
+    name: "&e胡萝卜"
+  CARVED_PUMPKIN:
+    price: 0.05
+    daily-limit: 1000
+    name: "&e雕刻南瓜"
+  CHICKEN:
+    price: 0.05
+    daily-limit: 1000
+    name: "&e生鸡肉"
+  COD:
+    price: 0.05
+    daily-limit: 1000
+    name: "&e生鳕鱼"
+  COD_BUCKET:
+    price: 3.00
+    daily-limit: 1000
+    name: "&e鳕鱼桶"
+  COOKED_BEEF:
+    price: 0.05
+    daily-limit: 1000
+    name: "&e牛排"
+  COOKED_CHICKEN:
+    price: 0.05
+    daily-limit: 1000
+    name: "&e熟鸡肉"
+  COOKED_COD:
+    price: 0.05
+    daily-limit: 1000
+    name: "&e熟鳕鱼"
+  COOKED_MUTTON:
+    price: 0.05
+    daily-limit: 1000
+    name: "&e熟羊肉"
+  COOKED_PORKCHOP:
+    price: 0.05
+    daily-limit: 1000
+    name: "&e熟猪排"
+  COOKED_RABBIT:
+    price: 0.05
+    daily-limit: 1000
+    name: "&e熟兔肉"
+  COOKED_SALMON:
+    price: 0.05
+    daily-limit: 1000
+    name: "&e熟鲑鱼"
+  COOKIE:
+    price: 0.02
+    daily-limit: 1000
+    name: "&e曲奇"
+  DRAGON_EGG:
+    price: 10000.00
+    daily-limit: 1
+    name: "&b龙蛋"
+  EGG:
+    price: 0.05
+    daily-limit: 1000
+    name: "&e鸡蛋"
+  GLOW_BERRIES:
+    price: 0.06
+    daily-limit: 800
+    name: "&e发光浆果"
+  HONEY_BLOCK:
+    price: 0.32
+    daily-limit: 1000
+    name: "&6蜂蜜块"
+  HONEY_BOTTLE:
+    price: 0.12
+    daily-limit: 500
+    name: "&6蜂蜜瓶"
+  HONEYCOMB:
+    price: 0.10
+    daily-limit: 500
+    name: "&6蜜脾"
+  HONEYCOMB_BLOCK:
+    price: 0.40
+    daily-limit: 1000
+    name: "&6蜜脾块"
+  MELON:
+    price: 0.18
+    daily-limit: 1000
+    name: "&e西瓜"
+  MELON_SEEDS:
+    price: 0.02
+    daily-limit: 1000
+    name: "&e西瓜种子"
+  MILK_BUCKET:
+    price: 2.25
+    daily-limit: 1000
+    name: "&e奶桶"
+  MUSIC_DISC_LAVA_CHICKEN:
+    price: 50.00
+    daily-limit: 1000
+    name: "&e音乐唱片"
+  MUTTON:
+    price: 0.05
+    daily-limit: 1000
+    name: "&e生羊肉"
+  POISONOUS_POTATO:
+    price: 0.05
+    daily-limit: 1000
+    name: "&e毒马铃薯"
+  PORKCHOP:
+    price: 0.05
+    daily-limit: 1000
+    name: "&e生猪排"
+  POTATO:
+    price: 0.05
+    daily-limit: 1000
+    name: "&e马铃薯"
+  PUMPKIN:
+    price: 0.08
+    daily-limit: 600
+    name: "&e南瓜"
+  PUMPKIN_PIE:
+    price: 0.17
+    daily-limit: 1000
+    name: "&e南瓜派"
+  PUMPKIN_SEEDS:
+    price: 0.02
+    daily-limit: 1000
+    name: "&e南瓜种子"
+  RABBIT:
+    price: 0.05
+    daily-limit: 1000
+    name: "&e生兔肉"
+  RABBIT_FOOT:
+    price: 0.05
+    daily-limit: 1000
+    name: "&e兔子脚"
+  RABBIT_HIDE:
+    price: 0.06
+    daily-limit: 1000
+    name: "&e兔子皮"
+  RABBIT_STEW:
+    price: 0.20
+    daily-limit: 1000
+    name: "&e兔肉煲"
+  SALMON:
+    price: 0.05
+    daily-limit: 1000
+    name: "&e生鲑鱼"
+  SALMON_BUCKET:
+    price: 3.00
+    daily-limit: 1000
+    name: "&e鲑鱼桶"
+  SNIFFER_EGG:
+    price: 30.00
+    daily-limit: 20
+    name: "&b嗅探兽蛋"
+  SUSPICIOUS_STEW:
+    price: 0.13
+    daily-limit: 1000
+    name: "&e谜之炖菜"
+  SWEET_BERRIES:
+    price: 0.04
+    daily-limit: 1500
+    name: "&e甜浆果"
+  TROPICAL_FISH:
+    price: 0.05
+    daily-limit: 1000
+    name: "&e热带鱼"
+  TROPICAL_FISH_BUCKET:
+    price: 5.00
+    daily-limit: 1000
+    name: "&e热带鱼桶"
+  TURTLE_EGG:
+    price: 3.00
+    daily-limit: 1000
+    name: "&e海龟蛋"
+  WHEAT:
+    price: 0.06
+    daily-limit: 1000
+    name: "&e小麦"
+  WHEAT_SEEDS:
+    price: 0.05
+    daily-limit: 1000
+    name: "&e小麦种子"
+
+  # ================= 染料与彩色方块 =================
+  BLACK_BANNER:
+    price: 1.57
+    daily-limit: 500
+    name: "&f黑色旗帜"
+  BLACK_BED:
+    price: 0.72
+    daily-limit: 500
+    name: "&f黑色床"
+  BLACK_BUNDLE:
+    price: 0.12
+    daily-limit: 500
+    name: "&f黑色收纳袋"
+  BLACK_CANDLE:
+    price: 0.21
+    daily-limit: 500
+    name: "&f黑色蜡烛"
+  BLACK_CARPET:
+    price: 0.17
+    daily-limit: 500
+    name: "&f黑色地毯"
+  BLACK_CONCRETE:
+    price: 0.12
+    daily-limit: 500
+    name: "&f黑色混凝土"
+  BLACK_CONCRETE_POWDER:
+    price: 0.03
+    daily-limit: 500
+    name: "&f黑色混凝土粉末"
+  BLACK_DYE:
+    price: 0.06
+    daily-limit: 500
+    name: "&f黑色染料"
+  BLACK_GLAZED_TERRACOTTA:
+    price: 0.04
+    daily-limit: 500
+    name: "&f黑色带釉陶瓦"
+  BLACK_SHULKER_BOX:
+    price: 0.12
+    daily-limit: 500
+    name: "&f黑色潜影盒"
+  BLACK_STAINED_GLASS:
+    price: 0.04
+    daily-limit: 500
+    name: "&f黑色染色玻璃"
+  BLACK_STAINED_GLASS_PANE:
+    price: 0.01
+    daily-limit: 500
+    name: "&f黑色染色玻璃板"
+  BLACK_TERRACOTTA:
+    price: 0.04
+    daily-limit: 500
+    name: "&f黑色陶瓦"
+  BLACK_WOOL:
+    price: 0.26
+    daily-limit: 300
+    name: "&f黑色羊毛"
+  BLUE_BANNER:
+    price: 1.45
+    daily-limit: 500
+    name: "&3蓝色旗帜"
+  BLUE_BED:
+    price: 0.70
+    daily-limit: 500
+    name: "&3蓝色床"
+  BLUE_BUNDLE:
+    price: 0.12
+    daily-limit: 500
+    name: "&3蓝色收纳袋"
+  BLUE_CANDLE:
+    price: 0.19
+    daily-limit: 500
+    name: "&3蓝色蜡烛"
+  BLUE_CARPET:
+    price: 0.16
+    daily-limit: 500
+    name: "&3蓝色地毯"
+  BLUE_CONCRETE:
+    price: 0.12
+    daily-limit: 500
+    name: "&3蓝色混凝土"
+  BLUE_CONCRETE_POWDER:
+    price: 0.03
+    daily-limit: 500
+    name: "&3蓝色混凝土粉末"
+  BLUE_DYE:
+    price: 0.04
+    daily-limit: 500
+    name: "&3蓝色染料"
+  BLUE_GLAZED_TERRACOTTA:
+    price: 0.04
+    daily-limit: 500
+    name: "&3蓝色带釉陶瓦"
+  BLUE_SHULKER_BOX:
+    price: 0.12
+    daily-limit: 500
+    name: "&3蓝色潜影盒"
+  BLUE_STAINED_GLASS:
+    price: 0.04
+    daily-limit: 500
+    name: "&3蓝色染色玻璃"
+  BLUE_STAINED_GLASS_PANE:
+    price: 0.01
+    daily-limit: 500
+    name: "&3蓝色染色玻璃板"
+  BLUE_TERRACOTTA:
+    price: 0.04
+    daily-limit: 500
+    name: "&3蓝色陶瓦"
+  BLUE_WOOL:
+    price: 0.24
+    daily-limit: 300
+    name: "&3蓝色羊毛"
+  BROWN_BANNER:
+    price: 1.57
+    daily-limit: 500
+    name: "&f棕色旗帜"
+  BROWN_BED:
+    price: 0.72
+    daily-limit: 500
+    name: "&f棕色床"
+  BROWN_BUNDLE:
+    price: 0.12
+    daily-limit: 500
+    name: "&f棕色收纳袋"
+  BROWN_CANDLE:
+    price: 0.21
+    daily-limit: 500
+    name: "&f棕色蜡烛"
+  BROWN_CARPET:
+    price: 0.17
+    daily-limit: 500
+    name: "&f棕色地毯"
+  BROWN_CONCRETE:
+    price: 0.12
+    daily-limit: 500
+    name: "&f棕色混凝土"
+  BROWN_CONCRETE_POWDER:
+    price: 0.03
+    daily-limit: 500
+    name: "&f棕色混凝土粉末"
+  BROWN_DYE:
+    price: 0.06
+    daily-limit: 500
+    name: "&f棕色染料"
+  BROWN_GLAZED_TERRACOTTA:
+    price: 0.04
+    daily-limit: 500
+    name: "&f棕色带釉陶瓦"
+  BROWN_SHULKER_BOX:
+    price: 0.12
+    daily-limit: 500
+    name: "&f棕色潜影盒"
+  BROWN_STAINED_GLASS:
+    price: 0.04
+    daily-limit: 500
+    name: "&f棕色染色玻璃"
+  BROWN_STAINED_GLASS_PANE:
+    price: 0.01
+    daily-limit: 500
+    name: "&f棕色染色玻璃板"
+  BROWN_TERRACOTTA:
+    price: 0.04
+    daily-limit: 500
+    name: "&f棕色陶瓦"
+  BROWN_WOOL:
+    price: 0.26
+    daily-limit: 500
+    name: "&f棕色羊毛"
+  BUNDLE:
+    price: 0.29
+    daily-limit: 500
+    name: "&f收纳袋"
+  CANDLE:
+    price: 0.15
+    daily-limit: 500
+    name: "&f蜡烛"
+  CYAN_BANNER:
+    price: 1.33
+    daily-limit: 500
+    name: "&3青色旗帜"
+  CYAN_BED:
+    price: 0.68
+    daily-limit: 500
+    name: "&3青色床"
+  CYAN_BUNDLE:
+    price: 0.12
+    daily-limit: 500
+    name: "&3青色收纳袋"
+  CYAN_CANDLE:
+    price: 0.17
+    daily-limit: 500
+    name: "&3青色蜡烛"
+  CYAN_CARPET:
+    price: 0.14
+    daily-limit: 500
+    name: "&3青色地毯"
+  CYAN_CONCRETE:
+    price: 0.12
+    daily-limit: 500
+    name: "&3青色混凝土"
+  CYAN_CONCRETE_POWDER:
+    price: 0.03
+    daily-limit: 500
+    name: "&3青色混凝土粉末"
+  CYAN_DYE:
+    price: 0.02
+    daily-limit: 500
+    name: "&3青色染料"
+  CYAN_GLAZED_TERRACOTTA:
+    price: 0.04
+    daily-limit: 500
+    name: "&3青色带釉陶瓦"
+  CYAN_SHULKER_BOX:
+    price: 0.12
+    daily-limit: 500
+    name: "&3青色潜影盒"
+  CYAN_STAINED_GLASS:
+    price: 0.04
+    daily-limit: 500
+    name: "&3青色染色玻璃"
+  CYAN_STAINED_GLASS_PANE:
+    price: 0.01
+    daily-limit: 500
+    name: "&3青色染色玻璃板"
+  CYAN_TERRACOTTA:
+    price: 0.04
+    daily-limit: 500
+    name: "&3青色陶瓦"
+  CYAN_WOOL:
+    price: 0.22
+    daily-limit: 500
+    name: "&3青色羊毛"
+  GRAY_BANNER:
+    price: 1.39
+    daily-limit: 500
+    name: "&f灰色旗帜"
+  GRAY_BED:
+    price: 0.69
+    daily-limit: 500
+    name: "&f灰色床"
+  GRAY_BUNDLE:
+    price: 0.12
+    daily-limit: 500
+    name: "&f灰色收纳袋"
+  GRAY_CANDLE:
+    price: 0.18
+    daily-limit: 500
+    name: "&f灰色蜡烛"
+  GRAY_CARPET:
+    price: 0.15
+    daily-limit: 500
+    name: "&f灰色地毯"
+  GRAY_CONCRETE:
+    price: 0.12
+    daily-limit: 500
+    name: "&f灰色混凝土"
+  GRAY_CONCRETE_POWDER:
+    price: 0.03
+    daily-limit: 500
+    name: "&f灰色混凝土粉末"
+  GRAY_DYE:
+    price: 0.03
+    daily-limit: 500
+    name: "&f灰色染料"
+  GRAY_GLAZED_TERRACOTTA:
+    price: 0.04
+    daily-limit: 500
+    name: "&f灰色带釉陶瓦"
+  GRAY_SHULKER_BOX:
+    price: 0.12
+    daily-limit: 500
+    name: "&f灰色潜影盒"
+  GRAY_STAINED_GLASS:
+    price: 0.04
+    daily-limit: 500
+    name: "&f灰色染色玻璃"
+  GRAY_STAINED_GLASS_PANE:
+    price: 0.01
+    daily-limit: 500
+    name: "&f灰色染色玻璃板"
+  GRAY_TERRACOTTA:
+    price: 0.04
+    daily-limit: 500
+    name: "&f灰色陶瓦"
+  GRAY_WOOL:
+    price: 0.23
+    daily-limit: 500
+    name: "&f灰色羊毛"
+  GREEN_BANNER:
+    price: 1.57
+    daily-limit: 500
+    name: "&a绿色旗帜"
+  GREEN_BED:
+    price: 0.72
+    daily-limit: 500
+    name: "&a绿色床"
+  GREEN_BUNDLE:
+    price: 0.12
+    daily-limit: 500
+    name: "&a绿色收纳袋"
+  GREEN_CANDLE:
+    price: 0.21
+    daily-limit: 500
+    name: "&a绿色蜡烛"
+  GREEN_CARPET:
+    price: 0.17
+    daily-limit: 500
+    name: "&a绿色地毯"
+  GREEN_CONCRETE:
+    price: 0.12
+    daily-limit: 500
+    name: "&a绿色混凝土"
+  GREEN_CONCRETE_POWDER:
+    price: 0.03
+    daily-limit: 500
+    name: "&a绿色混凝土粉末"
+  GREEN_DYE:
+    price: 0.06
+    daily-limit: 500
+    name: "&a绿色染料"
+  GREEN_GLAZED_TERRACOTTA:
+    price: 0.04
+    daily-limit: 500
+    name: "&a绿色带釉陶瓦"
+  GREEN_SHULKER_BOX:
+    price: 0.12
+    daily-limit: 500
+    name: "&a绿色潜影盒"
+  GREEN_STAINED_GLASS:
+    price: 0.04
+    daily-limit: 500
+    name: "&a绿色染色玻璃"
+  GREEN_STAINED_GLASS_PANE:
+    price: 0.01
+    daily-limit: 500
+    name: "&a绿色染色玻璃板"
+  GREEN_TERRACOTTA:
+    price: 0.04
+    daily-limit: 500
+    name: "&a绿色陶瓦"
+  GREEN_WOOL:
+    price: 0.26
+    daily-limit: 300
+    name: "&a绿色羊毛"
+  LIGHT_BLUE_BANNER:
+    price: 1.33
+    daily-limit: 500
+    name: "&3淡蓝色旗帜"
+  LIGHT_BLUE_BED:
+    price: 0.68
+    daily-limit: 500
+    name: "&3淡蓝色床"
+  LIGHT_BLUE_BUNDLE:
+    price: 0.12
+    daily-limit: 500
+    name: "&3淡蓝色收纳袋"
+  LIGHT_BLUE_CANDLE:
+    price: 0.17
+    daily-limit: 500
+    name: "&3淡蓝色蜡烛"
+  LIGHT_BLUE_CARPET:
+    price: 0.14
+    daily-limit: 500
+    name: "&3淡蓝色地毯"
+  LIGHT_BLUE_CONCRETE:
+    price: 0.12
+    daily-limit: 500
+    name: "&3淡蓝色混凝土"
+  LIGHT_BLUE_CONCRETE_POWDER:
+    price: 0.03
+    daily-limit: 500
+    name: "&3淡蓝色混凝土粉末"
+  LIGHT_BLUE_DYE:
+    price: 0.02
+    daily-limit: 500
+    name: "&3淡蓝色染料"
+  LIGHT_BLUE_GLAZED_TERRACOTTA:
+    price: 0.04
+    daily-limit: 500
+    name: "&3淡蓝色带釉陶瓦"
+  LIGHT_BLUE_SHULKER_BOX:
+    price: 0.12
+    daily-limit: 500
+    name: "&3淡蓝色潜影盒"
+  LIGHT_BLUE_STAINED_GLASS:
+    price: 0.04
+    daily-limit: 500
+    name: "&3淡蓝色染色玻璃"
+  LIGHT_BLUE_STAINED_GLASS_PANE:
+    price: 0.01
+    daily-limit: 500
+    name: "&3淡蓝色染色玻璃板"
+  LIGHT_BLUE_TERRACOTTA:
+    price: 0.04
+    daily-limit: 500
+    name: "&3淡蓝色陶瓦"
+  LIGHT_BLUE_WOOL:
+    price: 0.22
+    daily-limit: 500
+    name: "&3淡蓝色羊毛"
+  LIGHT_GRAY_BANNER:
+    price: 1.33
+    daily-limit: 500
+    name: "&f淡灰色旗帜"
+  LIGHT_GRAY_BED:
+    price: 0.68
+    daily-limit: 500
+    name: "&f淡灰色床"
+  LIGHT_GRAY_BUNDLE:
+    price: 0.12
+    daily-limit: 500
+    name: "&f淡灰色收纳袋"
+  LIGHT_GRAY_CANDLE:
+    price: 0.17
+    daily-limit: 500
+    name: "&f淡灰色蜡烛"
+  LIGHT_GRAY_CARPET:
+    price: 0.14
+    daily-limit: 500
+    name: "&f淡灰色地毯"
+  LIGHT_GRAY_CONCRETE:
+    price: 0.12
+    daily-limit: 500
+    name: "&f淡灰色混凝土"
+  LIGHT_GRAY_CONCRETE_POWDER:
+    price: 0.03
+    daily-limit: 500
+    name: "&f淡灰色混凝土粉末"
+  LIGHT_GRAY_DYE:
+    price: 0.02
+    daily-limit: 500
+    name: "&f淡灰色染料"
+  LIGHT_GRAY_GLAZED_TERRACOTTA:
+    price: 0.04
+    daily-limit: 500
+    name: "&f淡灰色带釉陶瓦"
+  LIGHT_GRAY_SHULKER_BOX:
+    price: 0.12
+    daily-limit: 500
+    name: "&f淡灰色潜影盒"
+  LIGHT_GRAY_STAINED_GLASS:
+    price: 0.04
+    daily-limit: 500
+    name: "&f淡灰色染色玻璃"
+  LIGHT_GRAY_STAINED_GLASS_PANE:
+    price: 0.01
+    daily-limit: 500
+    name: "&f淡灰色染色玻璃板"
+  LIGHT_GRAY_TERRACOTTA:
+    price: 0.04
+    daily-limit: 500
+    name: "&f淡灰色陶瓦"
+  LIGHT_GRAY_WOOL:
+    price: 0.22
+    daily-limit: 500
+    name: "&f淡灰色羊毛"
+  LIME_BANNER:
+    price: 1.39
+    daily-limit: 500
+    name: "&a黄绿色旗帜"
+  LIME_BED:
+    price: 0.69
+    daily-limit: 500
+    name: "&a黄绿色床"
+  LIME_BUNDLE:
+    price: 0.12
+    daily-limit: 500
+    name: "&a黄绿色收纳袋"
+  LIME_CANDLE:
+    price: 0.18
+    daily-limit: 500
+    name: "&a黄绿色蜡烛"
+  LIME_CARPET:
+    price: 0.15
+    daily-limit: 500
+    name: "&a黄绿色地毯"
+  LIME_CONCRETE:
+    price: 0.12
+    daily-limit: 500
+    name: "&a黄绿色混凝土"
+  LIME_CONCRETE_POWDER:
+    price: 0.03
+    daily-limit: 500
+    name: "&a黄绿色混凝土粉末"
+  LIME_DYE:
+    price: 0.03
+    daily-limit: 500
+    name: "&a黄绿色染料"
+  LIME_GLAZED_TERRACOTTA:
+    price: 0.04
+    daily-limit: 500
+    name: "&a黄绿色带釉陶瓦"
+  LIME_SHULKER_BOX:
+    price: 0.12
+    daily-limit: 500
+    name: "&a黄绿色潜影盒"
+  LIME_STAINED_GLASS:
+    price: 0.04
+    daily-limit: 500
+    name: "&a黄绿色染色玻璃"
+  LIME_STAINED_GLASS_PANE:
+    price: 0.01
+    daily-limit: 500
+    name: "&a黄绿色染色玻璃板"
+  LIME_TERRACOTTA:
+    price: 0.04
+    daily-limit: 500
+    name: "&a黄绿色陶瓦"
+  LIME_WOOL:
+    price: 0.23
+    daily-limit: 500
+    name: "&a黄绿色羊毛"
+  MAGENTA_BANNER:
+    price: 1.33
+    daily-limit: 500
+    name: "&d品红色旗帜"
+  MAGENTA_BED:
+    price: 0.68
+    daily-limit: 500
+    name: "&d品红色床"
+  MAGENTA_BUNDLE:
+    price: 0.12
+    daily-limit: 500
+    name: "&d品红色收纳袋"
+  MAGENTA_CANDLE:
+    price: 0.17
+    daily-limit: 500
+    name: "&d品红色蜡烛"
+  MAGENTA_CARPET:
+    price: 0.14
+    daily-limit: 500
+    name: "&d品红色地毯"
+  MAGENTA_CONCRETE:
+    price: 0.12
+    daily-limit: 500
+    name: "&d品红色混凝土"
+  MAGENTA_CONCRETE_POWDER:
+    price: 0.03
+    daily-limit: 500
+    name: "&d品红色混凝土粉末"
+  MAGENTA_DYE:
+    price: 0.02
+    daily-limit: 500
+    name: "&d品红色染料"
+  MAGENTA_GLAZED_TERRACOTTA:
+    price: 0.04
+    daily-limit: 500
+    name: "&d品红色带釉陶瓦"
+  MAGENTA_SHULKER_BOX:
+    price: 0.12
+    daily-limit: 500
+    name: "&d品红色潜影盒"
+  MAGENTA_STAINED_GLASS:
+    price: 0.04
+    daily-limit: 500
+    name: "&d品红色染色玻璃"
+  MAGENTA_STAINED_GLASS_PANE:
+    price: 0.01
+    daily-limit: 500
+    name: "&d品红色染色玻璃板"
+  MAGENTA_TERRACOTTA:
+    price: 0.04
+    daily-limit: 500
+    name: "&d品红色陶瓦"
+  MAGENTA_WOOL:
+    price: 0.22
+    daily-limit: 500
+    name: "&d品红色羊毛"
+  ORANGE_BANNER:
+    price: 1.33
+    daily-limit: 500
+    name: "&6橙色旗帜"
+  ORANGE_BED:
+    price: 0.68
+    daily-limit: 500
+    name: "&6橙色床"
+  ORANGE_BUNDLE:
+    price: 0.12
+    daily-limit: 500
+    name: "&6橙色收纳袋"
+  ORANGE_CANDLE:
+    price: 0.17
+    daily-limit: 500
+    name: "&6橙色蜡烛"
+  ORANGE_CARPET:
+    price: 0.14
+    daily-limit: 500
+    name: "&6橙色地毯"
+  ORANGE_CONCRETE:
+    price: 0.12
+    daily-limit: 500
+    name: "&6橙色混凝土"
+  ORANGE_CONCRETE_POWDER:
+    price: 0.03
+    daily-limit: 500
+    name: "&6橙色混凝土粉末"
+  ORANGE_DYE:
+    price: 0.02
+    daily-limit: 500
+    name: "&6橙色染料"
+  ORANGE_GLAZED_TERRACOTTA:
+    price: 0.04
+    daily-limit: 500
+    name: "&6橙色带釉陶瓦"
+  ORANGE_SHULKER_BOX:
+    price: 0.12
+    daily-limit: 500
+    name: "&6橙色潜影盒"
+  ORANGE_STAINED_GLASS:
+    price: 0.04
+    daily-limit: 500
+    name: "&6橙色染色玻璃"
+  ORANGE_STAINED_GLASS_PANE:
+    price: 0.01
+    daily-limit: 500
+    name: "&6橙色染色玻璃板"
+  ORANGE_TERRACOTTA:
+    price: 0.04
+    daily-limit: 500
+    name: "&6橙色陶瓦"
+  ORANGE_WOOL:
+    price: 0.22
+    daily-limit: 500
+    name: "&6橙色羊毛"
+  PINK_BANNER:
+    price: 1.27
+    daily-limit: 500
+    name: "&f粉红色旗帜"
+  PINK_BED:
+    price: 0.67
+    daily-limit: 500
+    name: "&f粉红色床"
+  PINK_BUNDLE:
+    price: 0.12
+    daily-limit: 500
+    name: "&f粉红色收纳袋"
+  PINK_CANDLE:
+    price: 0.16
+    daily-limit: 500
+    name: "&f粉红色蜡烛"
+  PINK_CARPET:
+    price: 0.14
+    daily-limit: 500
+    name: "&f粉红色地毯"
+  PINK_CONCRETE:
+    price: 0.12
+    daily-limit: 500
+    name: "&f粉红色混凝土"
+  PINK_CONCRETE_POWDER:
+    price: 0.03
+    daily-limit: 500
+    name: "&f粉红色混凝土粉末"
+  PINK_DYE:
+    price: 0.01
+    daily-limit: 500
+    name: "&f粉红色染料"
+  PINK_GLAZED_TERRACOTTA:
+    price: 0.04
+    daily-limit: 500
+    name: "&f粉红色带釉陶瓦"
+  PINK_SHULKER_BOX:
+    price: 0.12
+    daily-limit: 500
+    name: "&f粉红色潜影盒"
+  PINK_STAINED_GLASS:
+    price: 0.04
+    daily-limit: 500
+    name: "&f粉红色染色玻璃"
+  PINK_STAINED_GLASS_PANE:
+    price: 0.01
+    daily-limit: 500
+    name: "&f粉红色染色玻璃板"
+  PINK_TERRACOTTA:
+    price: 0.04
+    daily-limit: 500
+    name: "&f粉红色陶瓦"
+  PINK_WOOL:
+    price: 0.21
+    daily-limit: 500
+    name: "&f粉红色羊毛"
+  PURPLE_BANNER:
+    price: 1.39
+    daily-limit: 500
+    name: "&d紫色旗帜"
+  PURPLE_BED:
+    price: 0.69
+    daily-limit: 500
+    name: "&d紫色床"
+  PURPLE_BUNDLE:
+    price: 0.12
+    daily-limit: 500
+    name: "&d紫色收纳袋"
+  PURPLE_CANDLE:
+    price: 0.18
+    daily-limit: 500
+    name: "&d紫色蜡烛"
+  PURPLE_CARPET:
+    price: 0.15
+    daily-limit: 500
+    name: "&d紫色地毯"
+  PURPLE_CONCRETE:
+    price: 0.12
+    daily-limit: 500
+    name: "&d紫色混凝土"
+  PURPLE_CONCRETE_POWDER:
+    price: 0.03
+    daily-limit: 500
+    name: "&d紫色混凝土粉末"
+  PURPLE_DYE:
+    price: 0.03
+    daily-limit: 500
+    name: "&d紫色染料"
+  PURPLE_GLAZED_TERRACOTTA:
+    price: 0.04
+    daily-limit: 500
+    name: "&d紫色带釉陶瓦"
+  PURPLE_SHULKER_BOX:
+    price: 0.12
+    daily-limit: 500
+    name: "&d紫色潜影盒"
+  PURPLE_STAINED_GLASS:
+    price: 0.04
+    daily-limit: 500
+    name: "&d紫色染色玻璃"
+  PURPLE_STAINED_GLASS_PANE:
+    price: 0.01
+    daily-limit: 500
+    name: "&d紫色染色玻璃板"
+  PURPLE_TERRACOTTA:
+    price: 0.04
+    daily-limit: 500
+    name: "&d紫色陶瓦"
+  PURPLE_WOOL:
+    price: 0.23
+    daily-limit: 500
+    name: "&d紫色羊毛"
+  RED_BANNER:
+    price: 1.33
+    daily-limit: 500
+    name: "&c红色旗帜"
+  RED_BED:
+    price: 0.68
+    daily-limit: 500
+    name: "&c红色床"
+  RED_BUNDLE:
+    price: 0.12
+    daily-limit: 500
+    name: "&c红色收纳袋"
+  RED_CANDLE:
+    price: 0.17
+    daily-limit: 500
+    name: "&c红色蜡烛"
+  RED_CARPET:
+    price: 0.14
+    daily-limit: 500
+    name: "&c红色地毯"
+  RED_CONCRETE:
+    price: 0.12
+    daily-limit: 500
+    name: "&c红色混凝土"
+  RED_CONCRETE_POWDER:
+    price: 0.03
+    daily-limit: 500
+    name: "&c红色混凝土粉末"
+  RED_DYE:
+    price: 0.02
+    daily-limit: 500
+    name: "&c红色染料"
+  RED_GLAZED_TERRACOTTA:
+    price: 0.04
+    daily-limit: 500
+    name: "&c红色带釉陶瓦"
+  RED_SHULKER_BOX:
+    price: 0.12
+    daily-limit: 500
+    name: "&c红色潜影盒"
+  RED_STAINED_GLASS:
+    price: 0.04
+    daily-limit: 500
+    name: "&c红色染色玻璃"
+  RED_STAINED_GLASS_PANE:
+    price: 0.01
+    daily-limit: 500
+    name: "&c红色染色玻璃板"
+  RED_TERRACOTTA:
+    price: 0.04
+    daily-limit: 500
+    name: "&c红色陶瓦"
+  RED_WOOL:
+    price: 0.22
+    daily-limit: 300
+    name: "&c红色羊毛"
+  SHULKER_BOX:
+    price: 30.16
+    daily-limit: 500
+    name: "&f潜影盒"
+  TERRACOTTA:
+    price: 0.04
+    daily-limit: 500
+    name: "&f陶瓦"
+  WHITE_BANNER:
+    price: 1.21
+    daily-limit: 500
+    name: "&f白色旗帜"
+  WHITE_BED:
+    price: 0.66
+    daily-limit: 500
+    name: "&f白色床"
+  WHITE_BUNDLE:
+    price: 0.12
+    daily-limit: 500
+    name: "&f白色收纳袋"
+  WHITE_CANDLE:
+    price: 0.16
+    daily-limit: 500
+    name: "&f白色蜡烛"
+  WHITE_CARPET:
+    price: 0.13
+    daily-limit: 500
+    name: "&f白色地毯"
+  WHITE_CONCRETE:
+    price: 0.12
+    daily-limit: 500
+    name: "&f白色混凝土"
+  WHITE_CONCRETE_POWDER:
+    price: 0.03
+    daily-limit: 500
+    name: "&f白色混凝土粉末"
+  WHITE_DYE:
+    price: 0.01
+    daily-limit: 500
+    name: "&f白色染料"
+  WHITE_GLAZED_TERRACOTTA:
+    price: 0.04
+    daily-limit: 500
+    name: "&f白色带釉陶瓦"
+  WHITE_SHULKER_BOX:
+    price: 0.12
+    daily-limit: 500
+    name: "&f白色潜影盒"
+  WHITE_STAINED_GLASS:
+    price: 0.04
+    daily-limit: 500
+    name: "&f白色染色玻璃"
+  WHITE_STAINED_GLASS_PANE:
+    price: 0.01
+    daily-limit: 500
+    name: "&f白色染色玻璃板"
+  WHITE_TERRACOTTA:
+    price: 0.04
+    daily-limit: 500
+    name: "&f白色陶瓦"
+  WHITE_WOOL:
+    price: 0.20
+    daily-limit: 300
+    name: "&f白色羊毛"
+  YELLOW_BANNER:
+    price: 1.33
+    daily-limit: 500
+    name: "&6黄色旗帜"
+  YELLOW_BED:
+    price: 0.68
+    daily-limit: 500
+    name: "&6黄色床"
+  YELLOW_BUNDLE:
+    price: 0.12
+    daily-limit: 500
+    name: "&6黄色收纳袋"
+  YELLOW_CANDLE:
+    price: 0.17
+    daily-limit: 500
+    name: "&6黄色蜡烛"
+  YELLOW_CARPET:
+    price: 0.14
+    daily-limit: 500
+    name: "&6黄色地毯"
+  YELLOW_CONCRETE:
+    price: 0.12
+    daily-limit: 500
+    name: "&6黄色混凝土"
+  YELLOW_CONCRETE_POWDER:
+    price: 0.03
+    daily-limit: 500
+    name: "&6黄色混凝土粉末"
+  YELLOW_DYE:
+    price: 0.02
+    daily-limit: 500
+    name: "&6黄色染料"
+  YELLOW_GLAZED_TERRACOTTA:
+    price: 0.04
+    daily-limit: 500
+    name: "&6黄色带釉陶瓦"
+  YELLOW_SHULKER_BOX:
+    price: 0.12
+    daily-limit: 500
+    name: "&6黄色潜影盒"
+  YELLOW_STAINED_GLASS:
+    price: 0.04
+    daily-limit: 500
+    name: "&6黄色染色玻璃"
+  YELLOW_STAINED_GLASS_PANE:
+    price: 0.01
+    daily-limit: 500
+    name: "&6黄色染色玻璃板"
+  YELLOW_TERRACOTTA:
+    price: 0.04
+    daily-limit: 500
+    name: "&6黄色陶瓦"
+  YELLOW_WOOL:
+    price: 0.22
+    daily-limit: 300
+    name: "&6黄色羊毛"
+
+  # ================= 容器与装饰 =================
+  ACACIA_DOOR:
+    price: 0.04
+    daily-limit: 500
+    name: "&f金合欢木门"
+  ACACIA_FENCE:
+    price: 0.03
+    daily-limit: 500
+    name: "&f金合欢木栅栏"
+  ACACIA_FENCE_GATE:
+    price: 0.08
+    daily-limit: 500
+    name: "&f金合欢木栅栏门"
+  ACACIA_HANGING_SIGN:
+    price: 0.37
+    daily-limit: 500
+    name: "&f悬挂式金合欢木告示牌"
+  ACACIA_SIGN:
+    price: 0.04
+    daily-limit: 500
+    name: "&f金合欢木告示牌"
+  ACACIA_TRAPDOOR:
+    price: 0.06
+    daily-limit: 500
+    name: "&f金合欢木活板门"
+  ANVIL:
+    price: 22.32
+    daily-limit: 500
+    name: "&f铁砧"
+  BARREL:
+    price: 0.14
+    daily-limit: 500
+    name: "&f木桶"
+  BELL:
+    price: 10.00
+    daily-limit: 500
+    name: "&f钟"
+  BIRCH_DOOR:
+    price: 0.04
+    daily-limit: 500
+    name: "&f白桦木门"
+  BIRCH_FENCE:
+    price: 0.03
+    daily-limit: 500
+    name: "&f白桦木栅栏"
+  BIRCH_FENCE_GATE:
+    price: 0.08
+    daily-limit: 500
+    name: "&f白桦木栅栏门"
+  BIRCH_HANGING_SIGN:
+    price: 0.37
+    daily-limit: 500
+    name: "&f悬挂式白桦木告示牌"
+  BIRCH_SIGN:
+    price: 0.04
+    daily-limit: 500
+    name: "&f白桦木告示牌"
+  BIRCH_TRAPDOOR:
+    price: 0.06
+    daily-limit: 500
+    name: "&f白桦木活板门"
+  BLAST_FURNACE:
+    price: 4.48
+    daily-limit: 500
+    name: "&f高炉"
+  BOOK:
+    price: 0.42
+    daily-limit: 500
+    name: "&f书"
+  CAMPFIRE:
+    price: 0.35
+    daily-limit: 500
+    name: "&f营火"
+  CARTOGRAPHY_TABLE:
+    price: 0.20
+    daily-limit: 500
+    name: "&f制图台"
+  CAULDRON:
+    price: 5.04
+    daily-limit: 500
+    name: "&f炼药锅"
+  CHERRY_DOOR:
+    price: 0.04
+    daily-limit: 500
+    name: "&f樱花木门"
+  CHERRY_FENCE:
+    price: 0.03
+    daily-limit: 500
+    name: "&f樱花木栅栏"
+  CHERRY_FENCE_GATE:
+    price: 0.08
+    daily-limit: 500
+    name: "&f樱花木栅栏门"
+  CHERRY_HANGING_SIGN:
+    price: 0.37
+    daily-limit: 500
+    name: "&f悬挂式樱花木告示牌"
+  CHERRY_SIGN:
+    price: 0.04
+    daily-limit: 500
+    name: "&f樱花木告示牌"
+  CHERRY_TRAPDOOR:
+    price: 0.06
+    daily-limit: 500
+    name: "&f樱花木活板门"
+  CHEST:
+    price: 0.16
+    daily-limit: 500
+    name: "&f箱子"
+  CHIPPED_ANVIL:
+    price: 0.15
+    daily-limit: 500
+    name: "&f开裂的铁砧"
+  CLOCK:
+    price: 3.70
+    daily-limit: 500
+    name: "&f时钟"
+  COMPASS:
+    price: 2.98
+    daily-limit: 500
+    name: "&f指南针"
+  CRAFTING_TABLE:
+    price: 0.08
+    daily-limit: 500
+    name: "&f工作台"
+  CRIMSON_DOOR:
+    price: 0.04
+    daily-limit: 500
+    name: "&c绯红木门"
+  CRIMSON_FENCE:
+    price: 0.03
+    daily-limit: 500
+    name: "&c绯红木栅栏"
+  CRIMSON_FENCE_GATE:
+    price: 0.08
+    daily-limit: 500
+    name: "&c绯红木栅栏门"
+  CRIMSON_HANGING_SIGN:
+    price: 0.37
+    daily-limit: 500
+    name: "&c悬挂式绯红木告示牌"
+  CRIMSON_SIGN:
+    price: 0.04
+    daily-limit: 500
+    name: "&c绯红木告示牌"
+  CRIMSON_TRAPDOOR:
+    price: 0.06
+    daily-limit: 500
+    name: "&c绯红木活板门"
+  DAMAGED_ANVIL:
+    price: 0.15
+    daily-limit: 500
+    name: "&f损坏的铁砧"
+  DARK_OAK_DOOR:
+    price: 0.04
+    daily-limit: 500
+    name: "&f深色橡木门"
+  DARK_OAK_FENCE:
+    price: 0.03
+    daily-limit: 500
+    name: "&f深色橡木栅栏"
+  DARK_OAK_FENCE_GATE:
+    price: 0.08
+    daily-limit: 500
+    name: "&f深色橡木栅栏门"
+  DARK_OAK_HANGING_SIGN:
+    price: 0.37
+    daily-limit: 500
+    name: "&f悬挂式深色橡木告示牌"
+  DARK_OAK_SIGN:
+    price: 0.04
+    daily-limit: 500
+    name: "&f深色橡木告示牌"
+  DARK_OAK_TRAPDOOR:
+    price: 0.06
+    daily-limit: 500
+    name: "&f深色橡木活板门"
+  DECORATED_POT:
+    price: 0.04
+    daily-limit: 500
+    name: "&f饰纹陶罐"
+  # ================= 最高等级附魔书（统一 10） =================
+  ENCHANTED_BOOK_AQUA_AFFINITY:
+    material: ENCHANTED_BOOK
+    enchantment: aqua_affinity
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：水下速掘 I"
+  ENCHANTED_BOOK_BANE_OF_ARTHROPODS:
+    material: ENCHANTED_BOOK
+    enchantment: bane_of_arthropods
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：节肢杀手 V"
+  ENCHANTED_BOOK_BINDING_CURSE:
+    material: ENCHANTED_BOOK
+    enchantment: binding_curse
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：绑定诅咒 I"
+  ENCHANTED_BOOK_BLAST_PROTECTION:
+    material: ENCHANTED_BOOK
+    enchantment: blast_protection
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：爆炸保护 IV"
+  ENCHANTED_BOOK_BREACH:
+    material: ENCHANTED_BOOK
+    enchantment: breach
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：破甲 IV"
+  ENCHANTED_BOOK_CHANNELING:
+    material: ENCHANTED_BOOK
+    enchantment: channeling
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：引雷 I"
+  ENCHANTED_BOOK_DENSITY:
+    material: ENCHANTED_BOOK
+    enchantment: density
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：致密 V"
+  ENCHANTED_BOOK_DEPTH_STRIDER:
+    material: ENCHANTED_BOOK
+    enchantment: depth_strider
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：深海探索者 III"
+  ENCHANTED_BOOK_EFFICIENCY:
+    material: ENCHANTED_BOOK
+    enchantment: efficiency
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：效率 V"
+  ENCHANTED_BOOK_FEATHER_FALLING:
+    material: ENCHANTED_BOOK
+    enchantment: feather_falling
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：摔落缓冲 IV"
+  ENCHANTED_BOOK_FIRE_ASPECT:
+    material: ENCHANTED_BOOK
+    enchantment: fire_aspect
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：火焰附加 II"
+  ENCHANTED_BOOK_FIRE_PROTECTION:
+    material: ENCHANTED_BOOK
+    enchantment: fire_protection
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：火焰保护 IV"
+  ENCHANTED_BOOK_FLAME:
+    material: ENCHANTED_BOOK
+    enchantment: flame
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：火矢 I"
+  ENCHANTED_BOOK_FORTUNE:
+    material: ENCHANTED_BOOK
+    enchantment: fortune
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：时运 III"
+  ENCHANTED_BOOK_FROST_WALKER:
+    material: ENCHANTED_BOOK
+    enchantment: frost_walker
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：冰霜行者 II"
+  ENCHANTED_BOOK_IMPALING:
+    material: ENCHANTED_BOOK
+    enchantment: impaling
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：穿刺 V"
+  ENCHANTED_BOOK_INFINITY:
+    material: ENCHANTED_BOOK
+    enchantment: infinity
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：无限 I"
+  ENCHANTED_BOOK_KNOCKBACK:
+    material: ENCHANTED_BOOK
+    enchantment: knockback
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：击退 II"
+  ENCHANTED_BOOK_LOOTING:
+    material: ENCHANTED_BOOK
+    enchantment: looting
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：抢夺 III"
+  ENCHANTED_BOOK_LOYALTY:
+    material: ENCHANTED_BOOK
+    enchantment: loyalty
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：忠诚 III"
+  ENCHANTED_BOOK_LUCK_OF_THE_SEA:
+    material: ENCHANTED_BOOK
+    enchantment: luck_of_the_sea
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：海之眷顾 III"
+  ENCHANTED_BOOK_LUNGE:
+    material: ENCHANTED_BOOK
+    enchantment: lunge
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：突进 III"
+  ENCHANTED_BOOK_LURE:
+    material: ENCHANTED_BOOK
+    enchantment: lure
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：饵钓 III"
+  ENCHANTED_BOOK_MENDING:
+    material: ENCHANTED_BOOK
+    enchantment: mending
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：经验修补 I"
+  ENCHANTED_BOOK_MULTISHOT:
+    material: ENCHANTED_BOOK
+    enchantment: multishot
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：多重射击 I"
+  ENCHANTED_BOOK_PIERCING:
+    material: ENCHANTED_BOOK
+    enchantment: piercing
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：穿透 IV"
+  ENCHANTED_BOOK_POWER:
+    material: ENCHANTED_BOOK
+    enchantment: power
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：力量 V"
+  ENCHANTED_BOOK_PROJECTILE_PROTECTION:
+    material: ENCHANTED_BOOK
+    enchantment: projectile_protection
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：弹射物保护 IV"
+  ENCHANTED_BOOK_PROTECTION:
+    material: ENCHANTED_BOOK
+    enchantment: protection
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：保护 IV"
+  ENCHANTED_BOOK_PUNCH:
+    material: ENCHANTED_BOOK
+    enchantment: punch
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：冲击 II"
+  ENCHANTED_BOOK_QUICK_CHARGE:
+    material: ENCHANTED_BOOK
+    enchantment: quick_charge
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：快速装填 III"
+  ENCHANTED_BOOK_RESPIRATION:
+    material: ENCHANTED_BOOK
+    enchantment: respiration
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：水下呼吸 III"
+  ENCHANTED_BOOK_RIPTIDE:
+    material: ENCHANTED_BOOK
+    enchantment: riptide
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：激流 III"
+  ENCHANTED_BOOK_SHARPNESS:
+    material: ENCHANTED_BOOK
+    enchantment: sharpness
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：锋利 V"
+  ENCHANTED_BOOK_SILK_TOUCH:
+    material: ENCHANTED_BOOK
+    enchantment: silk_touch
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：精准采集 I"
+  ENCHANTED_BOOK_SMITE:
+    material: ENCHANTED_BOOK
+    enchantment: smite
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：亡灵杀手 V"
+  ENCHANTED_BOOK_SOUL_SPEED:
+    material: ENCHANTED_BOOK
+    enchantment: soul_speed
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：灵魂疾行 III"
+  ENCHANTED_BOOK_SWEEPING_EDGE:
+    material: ENCHANTED_BOOK
+    enchantment: sweeping_edge
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：横扫之刃 III"
+  ENCHANTED_BOOK_SWIFT_SNEAK:
+    material: ENCHANTED_BOOK
+    enchantment: swift_sneak
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：迅捷潜行 III"
+  ENCHANTED_BOOK_THORNS:
+    material: ENCHANTED_BOOK
+    enchantment: thorns
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：荆棘 III"
+  ENCHANTED_BOOK_UNBREAKING:
+    material: ENCHANTED_BOOK
+    enchantment: unbreaking
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：耐久 III"
+  ENCHANTED_BOOK_VANISHING_CURSE:
+    material: ENCHANTED_BOOK
+    enchantment: vanishing_curse
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：消失诅咒 I"
+  ENCHANTED_BOOK_WIND_BURST:
+    material: ENCHANTED_BOOK
+    enchantment: wind_burst
+    price: 10.00
+    daily-limit: 64
+    name: "&d附魔书：风爆 III"
+  ENCHANTING_TABLE:
+    price: 12.42
+    daily-limit: 500
+    name: "&f附魔台"
+  ENDER_CHEST:
+    price: 7.50
+    daily-limit: 500
+    name: "&f末影箱"
+  FILLED_MAP:
+    price: 0.15
+    daily-limit: 500
+    name: "&f地图"
+  FLETCHING_TABLE:
+    price: 0.28
+    daily-limit: 500
+    name: "&f制箭台"
+  FURNACE:
+    price: 0.64
+    daily-limit: 500
+    name: "&f熔炉"
+  GLASS:
+    price: 0.04
+    daily-limit: 500
+    name: "&f玻璃"
+  GLASS_BOTTLE:
+    price: 0.04
+    daily-limit: 500
+    name: "&f玻璃瓶"
+  GLASS_PANE:
+    price: 0.01
+    daily-limit: 500
+    name: "&f玻璃板"
+  GLOW_ITEM_FRAME:
+    price: 0.42
+    daily-limit: 500
+    name: "&f荧光物品展示框"
+  ITEM_FRAME:
+    price: 0.32
+    daily-limit: 500
+    name: "&f物品展示框"
+  JACK_O_LANTERN:
+    price: 0.07
+    daily-limit: 500
+    name: "&f南瓜灯"
+  JUNGLE_DOOR:
+    price: 0.04
+    daily-limit: 500
+    name: "&f丛林木门"
+  JUNGLE_FENCE:
+    price: 0.03
+    daily-limit: 500
+    name: "&f丛林木栅栏"
+  JUNGLE_FENCE_GATE:
+    price: 0.08
+    daily-limit: 500
+    name: "&f丛林木栅栏门"
+  JUNGLE_HANGING_SIGN:
+    price: 0.37
+    daily-limit: 500
+    name: "&f悬挂式丛林木告示牌"
+  JUNGLE_SIGN:
+    price: 0.04
+    daily-limit: 500
+    name: "&f丛林木告示牌"
+  JUNGLE_TRAPDOOR:
+    price: 0.06
+    daily-limit: 500
+    name: "&f丛林木活板门"
+  LADDER:
+    price: 0.02
+    daily-limit: 500
+    name: "&f梯子"
+  LANTERN:
+    price: 0.66
+    daily-limit: 500
+    name: "&f灯笼"
+  LEAD:
+    price: 0.12
+    daily-limit: 500
+    name: "&f拴绳"
+  MAP:
+    price: 3.46
+    daily-limit: 500
+    name: "&f空地图"
+  NAME_TAG:
+    price: 0.09
+    daily-limit: 150
+    name: "&f命名牌"
+  OAK_DOOR:
+    price: 0.04
+    daily-limit: 500
+    name: "&f橡木门"
+  OAK_FENCE:
+    price: 0.03
+    daily-limit: 500
+    name: "&f橡木栅栏"
+  OAK_FENCE_GATE:
+    price: 0.08
+    daily-limit: 500
+    name: "&f橡木栅栏门"
+  OAK_HANGING_SIGN:
+    price: 0.37
+    daily-limit: 500
+    name: "&f悬挂式橡木告示牌"
+  OAK_SIGN:
+    price: 0.04
+    daily-limit: 500
+    name: "&f橡木告示牌"
+  OAK_TRAPDOOR:
+    price: 0.06
+    daily-limit: 500
+    name: "&f橡木活板门"
+  PAINTING:
+    price: 0.28
+    daily-limit: 500
+    name: "&f画"
+  PALE_OAK_DOOR:
+    price: 0.04
+    daily-limit: 500
+    name: "&f苍白橡木门"
+  PALE_OAK_FENCE:
+    price: 0.03
+    daily-limit: 500
+    name: "&f苍白橡木栅栏"
+  PALE_OAK_FENCE_GATE:
+    price: 0.08
+    daily-limit: 500
+    name: "&f苍白橡木栅栏门"
+  PALE_OAK_HANGING_SIGN:
+    price: 0.37
+    daily-limit: 500
+    name: "&f悬挂式苍白橡木告示牌"
+  PALE_OAK_SIGN:
+    price: 0.04
+    daily-limit: 500
+    name: "&f苍白橡木告示牌"
+  PALE_OAK_TRAPDOOR:
+    price: 0.06
+    daily-limit: 500
+    name: "&f苍白橡木活板门"
+  POTENT_SULFUR:
+    price: 3.60
+    daily-limit: 500
+    name: "&f烈性硫黄"
+  # ================= 最高等级普通药水（统一 10） =================
+  POTION_NIGHT_VISION:
+    material: POTION
+    potion-type: night_vision
+    price: 10.00
+    daily-limit: 64
+    name: "&d夜视药水"
+  POTION_INVISIBILITY:
+    material: POTION
+    potion-type: invisibility
+    price: 10.00
+    daily-limit: 64
+    name: "&d隐身药水"
+  POTION_STRONG_LEAPING:
+    material: POTION
+    potion-type: strong_leaping
+    price: 10.00
+    daily-limit: 64
+    name: "&d跳跃药水 II"
+  POTION_FIRE_RESISTANCE:
+    material: POTION
+    potion-type: fire_resistance
+    price: 10.00
+    daily-limit: 64
+    name: "&d抗火药水"
+  POTION_STRONG_SWIFTNESS:
+    material: POTION
+    potion-type: strong_swiftness
+    price: 10.00
+    daily-limit: 64
+    name: "&d迅捷药水 II"
+  POTION_STRONG_SLOWNESS:
+    material: POTION
+    potion-type: strong_slowness
+    price: 10.00
+    daily-limit: 64
+    name: "&d迟缓药水 IV"
+  POTION_WATER_BREATHING:
+    material: POTION
+    potion-type: water_breathing
+    price: 10.00
+    daily-limit: 64
+    name: "&d水肺药水"
+  POTION_STRONG_HEALING:
+    material: POTION
+    potion-type: strong_healing
+    price: 10.00
+    daily-limit: 64
+    name: "&d治疗药水 II"
+  POTION_STRONG_HARMING:
+    material: POTION
+    potion-type: strong_harming
+    price: 10.00
+    daily-limit: 64
+    name: "&d伤害药水 II"
+  POTION_STRONG_POISON:
+    material: POTION
+    potion-type: strong_poison
+    price: 10.00
+    daily-limit: 64
+    name: "&d剧毒药水 II"
+  POTION_STRONG_REGENERATION:
+    material: POTION
+    potion-type: strong_regeneration
+    price: 10.00
+    daily-limit: 64
+    name: "&d再生药水 II"
+  POTION_STRONG_STRENGTH:
+    material: POTION
+    potion-type: strong_strength
+    price: 10.00
+    daily-limit: 64
+    name: "&d力量药水 II"
+  POTION_WEAKNESS:
+    material: POTION
+    potion-type: weakness
+    price: 10.00
+    daily-limit: 64
+    name: "&d虚弱药水"
+  POTION_LUCK:
+    material: POTION
+    potion-type: luck
+    price: 10.00
+    daily-limit: 64
+    name: "&d幸运药水"
+  POTION_STRONG_TURTLE_MASTER:
+    material: POTION
+    potion-type: strong_turtle_master
+    price: 10.00
+    daily-limit: 64
+    name: "&d神龟药水 II"
+  POTION_SLOW_FALLING:
+    material: POTION
+    potion-type: slow_falling
+    price: 10.00
+    daily-limit: 64
+    name: "&d缓降药水"
+  POTION_WIND_CHARGED:
+    material: POTION
+    potion-type: wind_charged
+    price: 10.00
+    daily-limit: 64
+    name: "&d蓄风药水"
+  POTION_WEAVING:
+    material: POTION
+    potion-type: weaving
+    price: 10.00
+    daily-limit: 64
+    name: "&d盘丝药水"
+  POTION_OOZING:
+    material: POTION
+    potion-type: oozing
+    price: 10.00
+    daily-limit: 64
+    name: "&d渗浆药水"
+  POTION_INFESTED:
+    material: POTION
+    potion-type: infested
+    price: 10.00
+    daily-limit: 64
+    name: "&d虫蚀药水"
+  RECOVERY_COMPASS:
+    price: 82.98
+    daily-limit: 50
+    name: "&b追溯指针"
+  SEA_LANTERN:
+    price: 1.20
+    daily-limit: 500
+    name: "&f海晶灯"
+  SMITHING_TABLE:
+    price: 1.52
+    daily-limit: 500
+    name: "&f锻造台"
+  SPRUCE_DOOR:
+    price: 0.04
+    daily-limit: 500
+    name: "&f云杉木门"
+  SPRUCE_FENCE:
+    price: 0.03
+    daily-limit: 500
+    name: "&f云杉木栅栏"
+  SPRUCE_FENCE_GATE:
+    price: 0.08
+    daily-limit: 500
+    name: "&f云杉木栅栏门"
+  SPRUCE_HANGING_SIGN:
+    price: 0.37
+    daily-limit: 500
+    name: "&f悬挂式云杉木告示牌"
+  SPRUCE_SIGN:
+    price: 0.04
+    daily-limit: 500
+    name: "&f云杉木告示牌"
+  SPRUCE_TRAPDOOR:
+    price: 0.06
+    daily-limit: 500
+    name: "&f云杉木活板门"
+  SPYGLASS:
+    price: 0.74
+    daily-limit: 500
+    name: "&f望远镜"
+  TINTED_GLASS:
+    price: 0.42
+    daily-limit: 500
+    name: "&f遮光玻璃"
+  TORCH:
+    price: 0.02
+    daily-limit: 500
+    name: "&f火把"
+  TRAPPED_CHEST:
+    price: 0.53
+    daily-limit: 500
+    name: "&f陷阱箱"
+  WARPED_DOOR:
+    price: 0.04
+    daily-limit: 500
+    name: "&3诡异木门"
+  WARPED_FENCE:
+    price: 0.03
+    daily-limit: 500
+    name: "&3诡异木栅栏"
+  WARPED_FENCE_GATE:
+    price: 0.08
+    daily-limit: 500
+    name: "&3诡异木栅栏门"
+  WARPED_HANGING_SIGN:
+    price: 0.37
+    daily-limit: 500
+    name: "&3悬挂式诡异木告示牌"
+  WARPED_SIGN:
+    price: 0.04
+    daily-limit: 500
+    name: "&3诡异木告示牌"
+  WARPED_TRAPDOOR:
+    price: 0.06
+    daily-limit: 500
+    name: "&3诡异木活板门"
+  WRITABLE_BOOK:
+    price: 0.58
+    daily-limit: 500
+    name: "&f书与笔"
+  WRITTEN_BOOK:
+    price: 0.15
+    daily-limit: 500
+    name: "&f成书"
+
+  # ================= 药水魔法与战利品 =================
+  ARMADILLO_SCUTE:
+    price: 1.00
+    daily-limit: 250
+    name: "&d犰狳鳞甲"
+  ARROW:
+    price: 0.05
+    daily-limit: 250
+    name: "&d箭"
+  BLAZE_POWDER:
+    price: 1.50
+    daily-limit: 250
+    name: "&d烈焰粉"
+  BLAZE_ROD:
+    price: 3.00
+    daily-limit: 250
+    name: "&d烈焰棒"
+  BREEZE_ROD:
+    price: 5.00
+    daily-limit: 250
+    name: "&d旋风棒"
+  CLOSED_EYEBLOSSOM:
+    price: 0.30
+    daily-limit: 250
+    name: "&d闭合的眼眸花"
+  DISC_FRAGMENT_5:
+    price: 5.00
+    daily-limit: 250
+    name: "&d唱片残片"
+  ECHO_SHARD:
+    price: 10.00
+    daily-limit: 40
+    name: "&d回响碎片"
+  END_ROD:
+    price: 0.77
+    daily-limit: 250
+    name: "&d末地烛"
+  ENDER_EYE:
+    price: 3.50
+    daily-limit: 250
+    name: "&d末影之眼"
+  ENDER_PEARL:
+    price: 2.00
+    daily-limit: 5000
+    name: "&d末影珍珠"
+  EXPERIENCE_BOTTLE:
+    price: 5.00
+    daily-limit: 250
+    name: "&d附魔之瓶"
+  FERMENTED_SPIDER_EYE:
+    price: 0.12
+    daily-limit: 250
+    name: "&d发酵蛛眼"
+  FIRE_CHARGE:
+    price: 0.56
+    daily-limit: 250
+    name: "&d火焰弹"
+  FIREWORK_ROCKET:
+    price: 0.05
+    daily-limit: 250
+    name: "&d烟花火箭"
+  FIREWORK_STAR:
+    price: 0.30
+    daily-limit: 250
+    name: "&d烟火之星"
+  FISHING_ROD:
+    price: 0.13
+    daily-limit: 250
+    name: "&d钓鱼竿"
+  GHAST_TEAR:
+    price: 4.00
+    daily-limit: 50
+    name: "&d恶魂之泪"
+  GOAT_HORN:
+    price: 10.00
+    daily-limit: 250
+    name: "&d山羊角"
+  GUNPOWDER:
+    price: 0.10
+    daily-limit: 500
+    name: "&d火药"
+  HEART_OF_THE_SEA:
+    price: 80.00
+    daily-limit: 10
+    name: "&b海洋之心"
+  MUSIC_DISC_11:
+    price: 30.00
+    daily-limit: 250
+    name: "&d音乐唱片"
+  MUSIC_DISC_13:
+    price: 30.00
+    daily-limit: 250
+    name: "&d音乐唱片"
+  MUSIC_DISC_5:
+    price: 45.00
+    daily-limit: 20
+    name: "&b音乐唱片"
+  MUSIC_DISC_BLOCKS:
+    price: 30.00
+    daily-limit: 250
+    name: "&d音乐唱片"
+  MUSIC_DISC_BOUNCE:
+    price: 30.00
+    daily-limit: 250
+    name: "&d音乐唱片"
+  MUSIC_DISC_CAT:
+    price: 30.00
+    daily-limit: 250
+    name: "&d音乐唱片"
+  MUSIC_DISC_CHIRP:
+    price: 30.00
+    daily-limit: 250
+    name: "&d音乐唱片"
+  MUSIC_DISC_CREATOR:
+    price: 50.00
+    daily-limit: 250
+    name: "&d音乐唱片"
+  MUSIC_DISC_CREATOR_MUSIC_BOX:
+    price: 30.00
+    daily-limit: 250
+    name: "&d音乐唱片"
+  MUSIC_DISC_FAR:
+    price: 30.00
+    daily-limit: 250
+    name: "&d音乐唱片"
+  MUSIC_DISC_MALL:
+    price: 30.00
+    daily-limit: 250
+    name: "&d音乐唱片"
+  MUSIC_DISC_MELLOHI:
+    price: 30.00
+    daily-limit: 250
+    name: "&d音乐唱片"
+  MUSIC_DISC_OTHERSIDE:
+    price: 50.00
+    daily-limit: 250
+    name: "&d音乐唱片"
+  MUSIC_DISC_PIGSTEP:
+    price: 50.00
+    daily-limit: 250
+    name: "&d音乐唱片"
+  MUSIC_DISC_RELIC:
+    price: 30.00
+    daily-limit: 250
+    name: "&d音乐唱片"
+  MUSIC_DISC_STAL:
+    price: 30.00
+    daily-limit: 250
+    name: "&d音乐唱片"
+  MUSIC_DISC_STRAD:
+    price: 30.00
+    daily-limit: 250
+    name: "&d音乐唱片"
+  MUSIC_DISC_TEARS:
+    price: 50.00
+    daily-limit: 250
+    name: "&d音乐唱片"
+  MUSIC_DISC_WAIT:
+    price: 30.00
+    daily-limit: 250
+    name: "&d音乐唱片"
+  MUSIC_DISC_WARD:
+    price: 30.00
+    daily-limit: 250
+    name: "&d音乐唱片"
+  NAUTILUS_SHELL:
+    price: 8.00
+    daily-limit: 100
+    name: "&d鹦鹉螺壳"
+  NETHER_STAR:
+    price: 150.00
+    daily-limit: 5
+    name: "&b下界之星"
+  OMINOUS_BOTTLE:
+    price: 15.00
+    daily-limit: 250
+    name: "&d不祥之瓶"
+  OMINOUS_TRIAL_KEY:
+    price: 40.00
+    daily-limit: 20
+    name: "&b不祥试炼钥匙"
+  OPEN_EYEBLOSSOM:
+    price: 0.30
+    daily-limit: 250
+    name: "&d张开的眼眸花"
+  PEARLESCENT_FROGLIGHT:
+    price: 0.30
+    daily-limit: 250
+    name: "&d珠光蛙明灯"
+  PHANTOM_MEMBRANE:
+    price: 2.00
+    daily-limit: 130
+    name: "&d幻翼膜"
+  SHULKER_SHELL:
+    price: 15.00
+    daily-limit: 500
+    name: "&d潜影壳"
+  SLIME_BALL:
+    price: 0.10
+    daily-limit: 500
+    name: "&a黏液球"
+  SLIME_BLOCK:
+    price: 0.90
+    daily-limit: 250
+    name: "&a黏液块"
+  SPECTRAL_ARROW:
+    price: 0.06
+    daily-limit: 250
+    name: "&d光灵箭"
+  SPIDER_EYE:
+    price: 0.04
+    daily-limit: 1000
+    name: "&d蜘蛛眼"
+  TIPPED_ARROW:
+    price: 0.30
+    daily-limit: 250
+    name: "&d药箭"
+  TOTEM_OF_UNDYING:
+    price: 100.00
+    daily-limit: 10
+    name: "&b不死图腾"
+  TRIAL_KEY:
+    price: 20.00
+    daily-limit: 128
+    name: "&b试炼钥匙"
+  TURTLE_SCUTE:
+    price: 2.00
+    daily-limit: 250
+    name: "&d海龟鳞甲"
+  WIND_CHARGE:
+    price: 1.25
+    daily-limit: 500
+    name: "&d风弹"
+
+  # ================= 其他生存物品 =================
+  AXOLOTL_BUCKET:
+    price: 20.00
+    daily-limit: 500
+    name: "&f美西螈桶"
+  AZURE_BLUET:
+    price: 0.10
+    daily-limit: 500
+    name: "&3蓝花美耳草"
+  BEACON:
+    price: 151.70
+    daily-limit: 3
+    name: "&b信标"
+  BEE_NEST:
+    price: 0.10
+    daily-limit: 500
+    name: "&f蜂巢"
+  BEEHIVE:
+    price: 0.42
+    daily-limit: 500
+    name: "&f蜂箱"
+  BIG_DRIPLEAF:
+    price: 0.10
+    daily-limit: 500
+    name: "&f大型垂滴叶"
+  BONE:
+    price: 0.04
+    daily-limit: 1500
+    name: "&f骨头"
+  BONE_BLOCK:
+    price: 0.09
+    daily-limit: 500
+    name: "&f骨块"
+  BONE_MEAL:
+    price: 0.01
+    daily-limit: 500
+    name: "&f骨粉"
+  BREWING_STAND:
+    price: 3.24
+    daily-limit: 500
+    name: "&f酿造台"
+  BRUSH:
+    price: 0.38
+    daily-limit: 500
+    name: "&f刷子"
+  BUCKET:
+    price: 2.16
+    daily-limit: 500
+    name: "&f铁桶"
+  CALCITE:
+    price: 0.03
+    daily-limit: 1500
+    name: "&f方解石"
+  CHISELED_CINNABAR:
+    price: 0.10
+    daily-limit: 500
+    name: "&f雕纹朱砂"
+  CHISELED_SULFUR:
+    price: 0.40
+    daily-limit: 500
+    name: "&f雕纹硫黄"
+  CHORUS_FRUIT:
+    price: 0.10
+    daily-limit: 500
+    name: "&f紫颂果"
+  CINNABAR:
+    price: 0.10
+    daily-limit: 500
+    name: "&f朱砂"
+  COBWEB:
+    price: 2.00
+    daily-limit: 500
+    name: "&f蜘蛛网"
+  COMPOSTER:
+    price: 0.07
+    daily-limit: 500
+    name: "&f堆肥桶"
+  CONDUIT:
+    price: 144.00
+    daily-limit: 500
+    name: "&f潮涌核心"
+  CREAKING_HEART:
+    price: 1.06
+    daily-limit: 500
+    name: "&f嘎枝之心"
+  CREEPER_HEAD:
+    price: 25.00
+    daily-limit: 20
+    name: "&b苦力怕的头"
+  DRAGON_BREATH:
+    price: 5.00
+    daily-limit: 500
+    name: "&f龙息"
+  DRAGON_HEAD:
+    price: 200.00
+    daily-limit: 5
+    name: "&b龙首"
+  DRIED_GHAST:
+    price: 32.01
+    daily-limit: 500
+    name: "&f失水恶魂"
+  ELYTRA:
+    price: 300.00
+    daily-limit: 1
+    name: "&b鞘翅"
+  END_CRYSTAL:
+    price: 7.78
+    daily-limit: 500
+    name: "&f末地水晶"
+  FARMLAND:
+    price: 0.10
+    daily-limit: 500
+    name: "&f耕地"
+  FEATHER:
+    price: 0.10
+    daily-limit: 500
+    name: "&f羽毛"
+  FLINT:
+    price: 0.10
+    daily-limit: 500
+    name: "&f燧石"
+  FLINT_AND_STEEL:
+    price: 0.82
+    daily-limit: 500
+    name: "&f打火石"
+  GLOW_INK_SAC:
+    price: 0.10
+    daily-limit: 500
+    name: "&f荧光墨囊"
+  GLOW_LICHEN:
+    price: 0.10
+    daily-limit: 500
+    name: "&f发光地衣"
+  HAY_BLOCK:
+    price: 0.54
+    daily-limit: 500
+    name: "&f干草捆"
+  INK_SAC:
+    price: 0.06
+    daily-limit: 1000
+    name: "&f墨囊"
+  JUKEBOX:
+    price: 5.16
+    daily-limit: 500
+    name: "&f唱片机"
+  LAVA_BUCKET:
+    price: 3.00
+    daily-limit: 500
+    name: "&f熔岩桶"
+  LEAF_LITTER:
+    price: 0.08
+    daily-limit: 500
+    name: "&f枯叶堆"
+  LEATHER:
+    price: 0.24
+    daily-limit: 500
+    name: "&f皮革"
+  LECTERN:
+    price: 1.42
+    daily-limit: 500
+    name: "&f讲台"
+  LOOM:
+    price: 0.14
+    daily-limit: 500
+    name: "&f织布机"
+  MAGMA_BLOCK:
+    price: 0.64
+    daily-limit: 500
+    name: "&f岩浆块"
+  MAGMA_CREAM:
+    price: 0.16
+    daily-limit: 250
+    name: "&f岩浆膏"
+  MYCELIUM:
+    price: 0.10
+    daily-limit: 500
+    name: "&f菌丝体"
+  NETHER_SPROUTS:
+    price: 0.10
+    daily-limit: 500
+    name: "&f下界苗"
+  NETHER_WART:
+    price: 0.08
+    daily-limit: 500
+    name: "&f下界疣"
+  NETHER_WART_BLOCK:
+    price: 0.72
+    daily-limit: 500
+    name: "&f下界疣块"
+  NOTE_BLOCK:
+    price: 0.26
+    daily-limit: 500
+    name: "&f音符盒"
+  OCHRE_FROGLIGHT:
+    price: 0.10
+    daily-limit: 500
+    name: "&f赭黄蛙明灯"
+  PAPER:
+    price: 0.06
+    daily-limit: 500
+    name: "&f纸"
+  PIGLIN_HEAD:
+    price: 25.00
+    daily-limit: 20
+    name: "&b猪灵的头"
+  PINK_PETALS:
+    price: 0.10
+    daily-limit: 500
+    name: "&f粉红色花簇"
+  PODZOL:
+    price: 0.10
+    daily-limit: 500
+    name: "&f灰化土"
+  POLISHED_CINNABAR:
+    price: 0.10
+    daily-limit: 500
+    name: "&f磨制朱砂"
+  POLISHED_SULFUR:
+    price: 0.40
+    daily-limit: 500
+    name: "&f磨制硫黄"
+  POPPED_CHORUS_FRUIT:
+    price: 0.10
+    daily-limit: 500
+    name: "&f爆裂紫颂果"
+  PUFFERFISH:
+    price: 0.10
+    daily-limit: 500
+    name: "&f河豚"
+  PUFFERFISH_BUCKET:
+    price: 4.00
+    daily-limit: 500
+    name: "&f河豚桶"
+  RESPAWN_ANCHOR:
+    price: 6.24
+    daily-limit: 500
+    name: "&f重生锚"
+  ROTTEN_FLESH:
+    price: 0.02
+    daily-limit: 3000
+    name: "&f腐肉"
+  SCAFFOLDING:
+    price: 0.02
+    daily-limit: 500
+    name: "&f脚手架"
+  SEA_PICKLE:
+    price: 0.10
+    daily-limit: 500
+    name: "&f海泡菜"
+  SHEARS:
+    price: 1.44
+    daily-limit: 500
+    name: "&f剪刀"
+  SHROOMLIGHT:
+    price: 0.10
+    daily-limit: 500
+    name: "&f菌光体"
+  SKELETON_SKULL:
+    price: 20.00
+    daily-limit: 30
+    name: "&b骷髅头颅"
+  SMALL_DRIPLEAF:
+    price: 0.10
+    daily-limit: 500
+    name: "&f小型垂滴叶"
+  SMOKER:
+    price: 0.96
+    daily-limit: 500
+    name: "&f烟熏炉"
+  SPONGE:
+    price: 20.00
+    daily-limit: 500
+    name: "&f海绵"
+  STICK:
+    price: 0.01
+    daily-limit: 500
+    name: "&f木棍"
+  STRING:
+    price: 0.05
+    daily-limit: 1000
+    name: "&f线"
+  SUGAR:
+    price: 0.04
+    daily-limit: 500
+    name: "&f糖"
+  SUGAR_CANE:
+    price: 0.06
+    daily-limit: 800
+    name: "&f甘蔗"
+  SULFUR:
+    price: 0.40
+    daily-limit: 500
+    name: "&f硫黄"
+  SULFUR_CUBE_BUCKET:
+    price: 10.00
+    daily-limit: 500
+    name: "&f硫方怪桶"
+  SULFUR_SPIKE:
+    price: 0.10
+    daily-limit: 500
+    name: "&f硫黄尖锥"
+  TADPOLE_BUCKET:
+    price: 5.00
+    daily-limit: 500
+    name: "&f蝌蚪桶"
+  TEST_BLOCK:
+    price: 0.10
+    daily-limit: 500
+    name: "&f测试方块"
+  TEST_INSTANCE_BLOCK:
+    price: 0.10
+    daily-limit: 500
+    name: "&f测试实例方块"
+  VERDANT_FROGLIGHT:
+    price: 0.10
+    daily-limit: 500
+    name: "&f青翠蛙明灯"
+  WARPED_WART_BLOCK:
+    price: 0.10
+    daily-limit: 500
+    name: "&3诡异疣块"
+  WATER_BUCKET:
+    price: 2.16
+    daily-limit: 500
+    name: "&f水桶"
+  WET_SPONGE:
+    price: 20.00
+    daily-limit: 500
+    name: "&f湿海绵"
+  WITHER_SKELETON_SKULL:
+    price: 40.00
+    daily-limit: 20
+    name: "&b凋灵骷髅头颅"
+  ZOMBIE_HEAD:
+    price: 20.00
+    daily-limit: 30
+    name: "&b僵尸的头"

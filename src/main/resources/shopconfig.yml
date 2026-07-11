@@ -1,0 +1,681 @@
+# ==========================================
+# DailySellShop 玩家购买商店配置 (Paper 26.2)
+# /dss 使用本文件；/ds 收购系统使用 SellShopconfig.yml。
+# 修改后执行 /dss reload 或 /ds reload 重载，两条命令都会重载两份配置。
+# 重载会取消所有正在等待自定义数量输入的交易，不会覆盖本文件。
+#
+# 编辑规则：
+# 1. 文件编码必须保持 UTF-8；缩进只能使用空格，不能使用 Tab。
+# 2. Material 必须填写 Bukkit Material 名称（全大写），例如 DIAMOND、PAPER。
+# 3. Java 箱子 GUI 的 slot 从 0 开始；第 1 行为 0-8，第 2 行为 9-17，以此类推。
+# 4. 菜单 size 会限制在 9-54，并自动向上修正为 9 的倍数。
+# 5. 文本支持 & 颜色代码，例如 &a 绿色、&c 红色、&l 粗体；空 Lore 行写成 ""。
+# 6. 基岩版使用 Floodgate 表单：名称、价格、分类和命令一致，但箱子材质、槽位和装饰填充只影响 Java GUI。
+# ==========================================
+
+settings:
+  # 普通商品默认购买价 = SellShopconfig.yml 中 price x 此倍率。
+  # 建议使用正数；1.0 表示买卖同价，1.2 表示购买价为收购价的 120%。
+  buy-price-multiplier: 1.0
+  # 普通商品自定义购买数量上限；刷怪蛋还会受自身 max-amount 限制。
+  custom-amount-max: 2304
+  # 点击“自定义数量”后允许输入的时间，单位为秒，最小按 1 秒处理。
+  # 输入错误后只允许再试一次，重试不会重新计算此倒计时。
+  custom-input-timeout-seconds: 60
+  # 等待自定义输入时，玩家离起点超过此距离会取消交易；0 表示只要发生位置变化就取消。
+  # 切换世界、死亡、退出服务器和插件重载也会取消。
+  custom-input-cancel-distance: 2.0
+  # 基岩版商品表单每页数量，插件会限制在 1-50；Java 版分页由 item-slots 数量决定。
+  bedrock-page-size: 20
+
+# 独立购买日志设置。日志记录时间、UUID、玩家名、商品、数量、单价和总价。
+logging:
+  # false 时同时关闭文件日志和购买记录控制台输出。
+  enabled: true
+  # true 时除写入文件外，再向服务器控制台输出一行购买记录。
+  console: false
+  # 相对于 plugins/DailySellShop/ 的路径；目录不存在时会自动创建，文件使用 UTF-8 追加写入。
+  file: "logs/purchases.log"
+
+# 购买结果音效。name 支持 Bukkit 音效常量或命名空间写法，例如 minecraft:entity.player.levelup。
+# enabled=false 可单独关闭；volume 小于 0 会按 0 处理；pitch 建议在 0.5-2.0 范围内。
+sounds:
+  purchase-success:
+    enabled: true
+    name: ENTITY_PLAYER_LEVELUP
+    volume: 1.0
+    pitch: 1.2
+  purchase-failure:
+    enabled: true
+    name: BLOCK_NOTE_BLOCK_BASS
+    volume: 1.0
+    pitch: 0.8
+
+# 购买商店聊天消息。所有消息都自动在前面拼接 prefix，并支持 & 颜色代码。
+# 常用占位符：
+# {max}=本次最大数量，{total}=总价，{balance}=余额，{error}=经济插件返回原因，
+# {amount}=实际数量，{requested}=原计划数量，{item}=商品名，{seconds}=剩余输入时间，{query}=搜索词。
+messages:
+  prefix: "&8[&6玩家商店&8] "
+  no-permission: "&c你没有权限执行此操作。"
+  economy-unavailable: "&c经济系统当前不可用，暂时无法购买。"
+  product-unavailable: "&c该商品已下架或你没有购买权限。"
+  category-disabled: "&c该分类当前未开放。"
+  invalid-amount: "&c购买数量必须在 1 至 {max} 之间。"
+  inventory-full: "&c背包没有空间，无法购买该商品。"
+  insufficient-funds: "&c余额不足，需要 ${total}，当前余额 ${balance}。"
+  withdraw-failed: "&c扣款失败：{error}"
+  delivery-failed: "&c物品发放失败，款项已自动退回。"
+  transaction-processing: "&c上一笔交易仍在处理中，请稍后再试。"
+  purchase-success: "&a成功购买 {amount} 个 {item}&a，花费 ${total}，剩余 ${balance}。"
+  partial-purchase: "&e背包空间不足，原计划购买 {requested} 个，实际购买 {amount} 个。"
+  custom-prompt: "&e请在 {seconds} 秒内输入购买数量，输入 cancel 或 取消可取消交易。"
+  custom-invalid: "&c输入无效，请输入 1 至 {max} 的整数。你还可以重试一次。"
+  custom-timeout: "&c输入超时，交易已取消。"
+  search-empty: "&c没有找到包含“{query}”的商品。"
+  reload-success: "&a购买商店与收购商店配置已重载。"
+
+# 10 个首页分类。分类 ID 是程序识别键，不能改名；可以修改 enabled、name、material、slot。
+# enabled=false 会同时从 Java GUI 和基岩版表单隐藏该分类。
+# slot 只影响 Java 首页，范围取决于 menus.home.size；分类槽位不要与首页按钮重复。
+categories:
+  building-blocks:
+    enabled: true
+    name: "&f建筑方块"
+    material: BRICKS
+    slot: 20
+  colored-blocks:
+    enabled: true
+    name: "&d染色方块"
+    material: CYAN_WOOL
+    slot: 21
+  natural-blocks:
+    enabled: true
+    name: "&a自然方块"
+    material: GRASS_BLOCK
+    slot: 22
+  functional-blocks:
+    enabled: true
+    name: "&e功能方块"
+    material: CRAFTING_TABLE
+    slot: 23
+  redstone-blocks:
+    enabled: true
+    name: "&c红石方块"
+    material: REDSTONE
+    slot: 24
+  tools-and-utilities:
+    enabled: true
+    name: "&b工具与实用物品"
+    material: DIAMOND_PICKAXE
+    slot: 29
+  combat:
+    enabled: true
+    name: "&4战斗物品"
+    material: DIAMOND_SWORD
+    slot: 30
+  food-and-drinks:
+    enabled: true
+    name: "&6食物与饮品"
+    material: GOLDEN_APPLE
+    slot: 31
+  raw-materials:
+    enabled: true
+    name: "&7原材料"
+    material: IRON_INGOT
+    slot: 32
+  spawn-eggs:
+    enabled: true
+    name: "&5刷怪蛋"
+    material: CREEPER_SPAWN_EGG
+    slot: 33
+
+# ================= 菜单配置通用说明 =================
+# 每个菜单的 title/name/lore 均支持 & 颜色代码。
+# 通用按钮字段：
+#   slot: Java GUI 槽位；material: 图标材质；name: 显示名称；lore: 说明文字。
+#   permission: 可选，玩家无此权限时按钮不显示且不能执行。
+#   commands: 可选；配置后会替代按钮原本动作，若仍要关闭菜单需显式加入 [close]。
+# commands 支持以下动作，并按列表顺序执行：
+#   [command] quickmenu open       玩家身份执行命令，不写开头斜杠
+#   [console] give {player} stone  控制台身份执行命令
+#   [op] somecommand               临时授予 OP 后以玩家身份执行，执行结束恢复原状态
+#   [message] &a文本               向玩家发送文本
+#   [sound] UI_BUTTON_CLICK        播放音效
+#   [close]                        关闭当前菜单
+# 通用占位符：{player}、{balance}、{amount}；商品界面另支持 {item}、{material}、
+# {price}、{total}、{slots}、{capacity}。特定菜单还有下方注明的专用占位符。
+menus:
+  # /dss 打开的分类首页。
+  home:
+    # 首页标题和行数。size 修改后，请同步检查所有分类和按钮 slot 是否仍在范围内。
+    title: "&0玩家商店 &8| &7商品分类"
+    size: 54
+    # 分类图标 Lore；支持 {count}=该玩家当前可见商品数、{balance}、{player}。
+    category-lore:
+      - "&7共有 &f{count} &7件商品"
+      - ""
+      - "&e点击查看该分类"
+    # fill 只填充尚未被分类或按钮占用的空槽；enabled=false 可关闭装饰填充。
+    fill:
+      enabled: true
+      material: BLACK_STAINED_GLASS_PANE
+      name: "&8"
+    # balance 与 close 是内置按钮；还可在 buttons 下添加任意自定义 ID。
+    # 自定义按钮只有配置 commands 才可点击执行；带 commands 的首页按钮也会显示在基岩版首页。
+    buttons:
+      balance:
+        slot: 4
+        material: EMERALD
+        name: "&a余额: &f${balance}"
+        lore:
+          - "&7普通商品购买价默认等于收购价"
+      main-menu:
+        slot: 48
+        material: ARROW
+        name: "&a返回主菜单"
+        lore:
+          - "&7点击返回服务器主菜单"
+        commands:
+          - "[command] quickmenu open"
+      close:
+        slot: 50
+        material: BARRIER
+        name: "&c关闭商店"
+
+  # 分类商品列表和 /dss search 搜索结果共用此菜单。
+  products:
+    # title 支持 {category}、{page}、{pages}。
+    title: "&0{category} &8| &7第 {page}/{pages} 页"
+    size: 54
+    # 每页商品占用的 Java GUI 槽位；列表长度就是 Java 版每页商品数。
+    # 不要与 previous/home/page/close/next 或自定义按钮槽位重复，否则后绘制的按钮会覆盖商品。
+    item-slots: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44]
+    # 商品 Lore 支持 {item}、{material}、{price}、{balance}、{capacity}。
+    product-lore:
+      - "&7物品 ID: &f{material}"
+      - "&7单价: &a${price}"
+      - "&7你的余额: &f${balance}"
+      - ""
+      - "&e点击选择购买数量"
+    fill:
+      enabled: true
+      material: GRAY_STAINED_GLASS_PANE
+      name: "&8"
+    # previous 和 next 仅在确实存在相邻页时显示；page 支持 {page}、{pages}、{count}、{balance}。
+    buttons:
+      previous:
+        slot: 45
+        material: ARROW
+        name: "&a上一页"
+      home:
+        slot: 48
+        material: NETHER_STAR
+        name: "&e返回分类首页"
+      page:
+        slot: 49
+        material: PAPER
+        name: "&f第 {page}/{pages} 页"
+        lore:
+          - "&7共 {count} 件商品"
+          - "&7余额: &f${balance}"
+      close:
+        slot: 50
+        material: BARRIER
+        name: "&c关闭商店"
+      next:
+        slot: 53
+        material: ARROW
+        name: "&a下一页"
+
+  # 点击商品后进入的数量选择与二次确认菜单。
+  amount:
+    title: "&0选择购买数量"
+    size: 54
+    # 商品摘要图标槽位；summary-lore 支持全部商品占位符。
+    summary-slot: 13
+    # presets 与 preset-slots 按相同下标一一对应；数量小于 1 或超过商品上限时不会显示。
+    # 两个列表长度不同时，只使用较短列表中能够配对的部分。
+    presets: [1, 5, 10, 20, 30, 40, 50, 64]
+    preset-slots: [19, 20, 21, 22, 23, 24, 25, 26]
+    # 所有预设数量共用同一图标样式，支持 {amount}、{total}、{balance}。
+    preset-button:
+      material: LIME_STAINED_GLASS_PANE
+      name: "&a购买 {amount} 个"
+      lore:
+        - "&7总价: &f${total}"
+        - ""
+        - "&e点击选择"
+    summary-lore:
+      - "&7单价: &a${price}"
+      - "&7已选数量: &f{amount}"
+      - "&7总价: &6${total}"
+      - "&7预计占用: &f{slots} 个背包格"
+      - "&7当前余额: &f${balance}"
+    # 只填充数量菜单中的空槽。
+    fill:
+      enabled: true
+      material: BLACK_STAINED_GLASS_PANE
+      name: "&8"
+    # confirm 只有玩家先选择预设数量或提交有效自定义数量后才显示。
+    # custom 支持 {max}、{distance}；confirm 支持 {amount}、{total}。
+    buttons:
+      custom:
+        slot: 31
+        material: WRITABLE_BOOK
+        name: "&b自定义数量"
+        lore:
+          - "&7范围: 1 - {max}"
+          - "&7输入期间移动超过 {distance} 格将取消"
+      confirm:
+        slot: 40
+        material: EMERALD_BLOCK
+        name: "&a确认购买 {amount} 个"
+        lore:
+          - "&7总价: &f${total}"
+          - ""
+          - "&a点击确认扣款"
+      back:
+        slot: 45
+        material: ARROW
+        name: "&e返回商品列表"
+      close:
+        slot: 53
+        material: BARRIER
+        name: "&c取消交易"
+
+# 普通商品覆盖配置。未配置时直接使用 SellShopconfig.yml 中的名称和价格，
+# 分类和排列顺序使用插件内置的 Mojang 26.2 创造模式目录。
+# 可用分类: building-blocks, colored-blocks, natural-blocks, functional-blocks,
+# redstone-blocks, tools-and-utilities, combat, food-and-drinks, raw-materials。
+# 节点名必须与 SellShopconfig.yml 的 items 键完全一致；药水和附魔书使用其扩展键，
+# 例如 POTION_STRONG_HEALING、ENCHANTED_BOOK_SHARPNESS，不能只写 POTION 或 ENCHANTED_BOOK。
+# 字段说明：
+# enabled=false 下架商品；name 覆盖显示名；price 覆盖倍率计算后的最终购买单价；
+# category 覆盖分类；weight 越小越靠前；permission 非空时，无权限玩家看不到也无法购买。
+product-overrides:
+  # DIAMOND:
+  #   enabled: true
+  #   name: "&b钻石"
+  #   price: 5.00
+  #   category: raw-materials
+  #   weight: 100
+  #   permission: ""
+
+# 只修正分类时可使用此简写；product-overrides 中的 category 优先级更高。
+# 格式：商品键: 分类 ID。无效分类会回退到自动分类。
+category-overrides:
+  # EXPERIENCE_BOTTLE: tools-and-utilities
+
+# 刷怪蛋默认值。单个刷怪蛋未写某字段时，会继承这里的对应值。
+spawn-egg-defaults:
+  # 默认是否上架；安全起见建议保持 false，再在常规生物节点中逐项 enabled: true。
+  enabled: false
+  # 默认排序权重，数值越小越靠前；未单独设置时还会叠加原版创造栏顺序。
+  weight: 1000
+  # 单次/自定义购买上限，最终还会被 settings.custom-amount-max 限制。
+  max-amount: 2304
+  # true 时要求 permission；false 时忽略 permission 字段。
+  require-permission: false
+  # 默认权限节点。玩家仍需拥有基础权限 dailysellshop.shop.spawnegg。
+  permission: "dailysellshop.shop.spawnegg"
+
+# 常规生物默认开放；Boss、特殊高风险实体默认关闭。
+# 节点名必须是有效的 *_SPAWN_EGG Material。
+# 每项支持：
+# enabled=是否上架；name=显示名；price=最终购买单价；weight=排序权重；
+# max-amount=该蛋单次最大数量；require-permission=是否启用独立权限；permission=独立权限节点。
+# 未填写的字段继承 spawn-egg-defaults。Boss、高风险或不可正常生成的实体建议保持 enabled: false。
+spawn-eggs:
+  ALLAY_SPAWN_EGG:
+    enabled: true
+    name: "&f悦灵刷怪蛋"
+    price: 800.00
+  ARMADILLO_SPAWN_EGG:
+    enabled: true
+    name: "&f犰狳刷怪蛋"
+    price: 180.00
+  AXOLOTL_SPAWN_EGG:
+    enabled: true
+    name: "&f美西螈刷怪蛋"
+    price: 300.00
+  BAT_SPAWN_EGG:
+    enabled: true
+    name: "&f蝙蝠刷怪蛋"
+    price: 80.00
+  BEE_SPAWN_EGG:
+    enabled: true
+    name: "&f蜜蜂刷怪蛋"
+    price: 220.00
+  BLAZE_SPAWN_EGG:
+    enabled: true
+    name: "&f烈焰人刷怪蛋"
+    price: 800.00
+  BOGGED_SPAWN_EGG:
+    enabled: true
+    name: "&f沼骸刷怪蛋"
+    price: 280.00
+  BREEZE_SPAWN_EGG:
+    enabled: true
+    name: "&f旋风人刷怪蛋"
+    price: 900.00
+  CAMEL_HUSK_SPAWN_EGG:
+    enabled: true
+    name: "&f骆驼尸壳刷怪蛋"
+    price: 450.00
+  CAMEL_SPAWN_EGG:
+    enabled: true
+    name: "&f骆驼刷怪蛋"
+    price: 350.00
+  CAT_SPAWN_EGG:
+    enabled: true
+    name: "&f猫刷怪蛋"
+    price: 120.00
+  CAVE_SPIDER_SPAWN_EGG:
+    enabled: true
+    name: "&f洞穴蜘蛛刷怪蛋"
+    price: 220.00
+  CHICKEN_SPAWN_EGG:
+    enabled: true
+    name: "&f鸡刷怪蛋"
+    price: 80.00
+  COD_SPAWN_EGG:
+    enabled: true
+    name: "&f鳕鱼刷怪蛋"
+    price: 60.00
+  COPPER_GOLEM_SPAWN_EGG:
+    enabled: true
+    name: "&f铜傀儡刷怪蛋"
+    price: 500.00
+  COW_SPAWN_EGG:
+    enabled: true
+    name: "&f牛刷怪蛋"
+    price: 120.00
+  CREAKING_SPAWN_EGG:
+    enabled: false
+    name: "&c嘎枝刷怪蛋"
+    price: 1500.00
+  CREEPER_SPAWN_EGG:
+    enabled: true
+    name: "&f苦力怕刷怪蛋"
+    price: 350.00
+  DOLPHIN_SPAWN_EGG:
+    enabled: true
+    name: "&f海豚刷怪蛋"
+    price: 350.00
+  DONKEY_SPAWN_EGG:
+    enabled: true
+    name: "&f驴刷怪蛋"
+    price: 250.00
+  DROWNED_SPAWN_EGG:
+    enabled: true
+    name: "&f溺尸刷怪蛋"
+    price: 240.00
+  ELDER_GUARDIAN_SPAWN_EGG:
+    enabled: false
+    name: "&c远古守卫者刷怪蛋"
+    price: 3000.00
+  ENDER_DRAGON_SPAWN_EGG:
+    enabled: false
+    name: "&4末影龙刷怪蛋"
+    price: 10000.00
+  ENDERMAN_SPAWN_EGG:
+    enabled: true
+    name: "&f末影人刷怪蛋"
+    price: 500.00
+  ENDERMITE_SPAWN_EGG:
+    enabled: true
+    name: "&f末影螨刷怪蛋"
+    price: 100.00
+  EVOKER_SPAWN_EGG:
+    enabled: true
+    name: "&f唤魔者刷怪蛋"
+    price: 2000.00
+  FOX_SPAWN_EGG:
+    enabled: true
+    name: "&f狐狸刷怪蛋"
+    price: 220.00
+  FROG_SPAWN_EGG:
+    enabled: true
+    name: "&f青蛙刷怪蛋"
+    price: 200.00
+  GHAST_SPAWN_EGG:
+    enabled: true
+    name: "&f恶魂刷怪蛋"
+    price: 600.00
+  GLOW_SQUID_SPAWN_EGG:
+    enabled: true
+    name: "&f发光鱿鱼刷怪蛋"
+    price: 120.00
+  GOAT_SPAWN_EGG:
+    enabled: true
+    name: "&f山羊刷怪蛋"
+    price: 200.00
+  GUARDIAN_SPAWN_EGG:
+    enabled: true
+    name: "&f守卫者刷怪蛋"
+    price: 450.00
+  HAPPY_GHAST_SPAWN_EGG:
+    enabled: true
+    name: "&f快乐恶魂刷怪蛋"
+    price: 900.00
+  HOGLIN_SPAWN_EGG:
+    enabled: true
+    name: "&f疣猪兽刷怪蛋"
+    price: 350.00
+  HORSE_SPAWN_EGG:
+    enabled: true
+    name: "&f马刷怪蛋"
+    price: 300.00
+  HUSK_SPAWN_EGG:
+    enabled: true
+    name: "&f尸壳刷怪蛋"
+    price: 180.00
+  IRON_GOLEM_SPAWN_EGG:
+    enabled: true
+    name: "&f铁傀儡刷怪蛋"
+    price: 1200.00
+  LLAMA_SPAWN_EGG:
+    enabled: true
+    name: "&f羊驼刷怪蛋"
+    price: 220.00
+  MAGMA_CUBE_SPAWN_EGG:
+    enabled: true
+    name: "&f岩浆怪刷怪蛋"
+    price: 400.00
+  MOOSHROOM_SPAWN_EGG:
+    enabled: true
+    name: "&f哞菇刷怪蛋"
+    price: 500.00
+  MULE_SPAWN_EGG:
+    enabled: true
+    name: "&f骡刷怪蛋"
+    price: 300.00
+  NAUTILUS_SPAWN_EGG:
+    enabled: true
+    name: "&f鹦鹉螺刷怪蛋"
+    price: 500.00
+  OCELOT_SPAWN_EGG:
+    enabled: true
+    name: "&f豹猫刷怪蛋"
+    price: 220.00
+  PANDA_SPAWN_EGG:
+    enabled: true
+    name: "&f熊猫刷怪蛋"
+    price: 400.00
+  PARCHED_SPAWN_EGG:
+    enabled: true
+    name: "&f焦骸刷怪蛋"
+    price: 260.00
+  PARROT_SPAWN_EGG:
+    enabled: true
+    name: "&f鹦鹉刷怪蛋"
+    price: 300.00
+  PHANTOM_SPAWN_EGG:
+    enabled: true
+    name: "&f幻翼刷怪蛋"
+    price: 280.00
+  PIG_SPAWN_EGG:
+    enabled: true
+    name: "&f猪刷怪蛋"
+    price: 100.00
+  PIGLIN_BRUTE_SPAWN_EGG:
+    enabled: true
+    name: "&f猪灵蛮兵刷怪蛋"
+    price: 900.00
+  PIGLIN_SPAWN_EGG:
+    enabled: true
+    name: "&f猪灵刷怪蛋"
+    price: 300.00
+  PILLAGER_SPAWN_EGG:
+    enabled: true
+    name: "&f掠夺者刷怪蛋"
+    price: 450.00
+  POLAR_BEAR_SPAWN_EGG:
+    enabled: true
+    name: "&f北极熊刷怪蛋"
+    price: 350.00
+  PUFFERFISH_SPAWN_EGG:
+    enabled: true
+    name: "&f河豚刷怪蛋"
+    price: 120.00
+  RABBIT_SPAWN_EGG:
+    enabled: true
+    name: "&f兔子刷怪蛋"
+    price: 100.00
+  RAVAGER_SPAWN_EGG:
+    enabled: true
+    name: "&f劫掠兽刷怪蛋"
+    price: 1200.00
+  SALMON_SPAWN_EGG:
+    enabled: true
+    name: "&f鲑鱼刷怪蛋"
+    price: 70.00
+  SHEEP_SPAWN_EGG:
+    enabled: true
+    name: "&f绵羊刷怪蛋"
+    price: 100.00
+  SHULKER_SPAWN_EGG:
+    enabled: true
+    name: "&f潜影贝刷怪蛋"
+    price: 1500.00
+  SILVERFISH_SPAWN_EGG:
+    enabled: true
+    name: "&f蠹虫刷怪蛋"
+    price: 100.00
+  SKELETON_HORSE_SPAWN_EGG:
+    enabled: true
+    name: "&f骷髅马刷怪蛋"
+    price: 700.00
+  SKELETON_SPAWN_EGG:
+    enabled: true
+    name: "&f骷髅刷怪蛋"
+    price: 180.00
+  SLIME_SPAWN_EGG:
+    enabled: true
+    name: "&f史莱姆刷怪蛋"
+    price: 500.00
+  SNIFFER_SPAWN_EGG:
+    enabled: true
+    name: "&f嗅探兽刷怪蛋"
+    price: 800.00
+  SNOW_GOLEM_SPAWN_EGG:
+    enabled: true
+    name: "&f雪傀儡刷怪蛋"
+    price: 300.00
+  SPIDER_SPAWN_EGG:
+    enabled: true
+    name: "&f蜘蛛刷怪蛋"
+    price: 150.00
+  SQUID_SPAWN_EGG:
+    enabled: true
+    name: "&f鱿鱼刷怪蛋"
+    price: 80.00
+  STRAY_SPAWN_EGG:
+    enabled: true
+    name: "&f流浪者刷怪蛋"
+    price: 220.00
+  STRIDER_SPAWN_EGG:
+    enabled: true
+    name: "&f炽足兽刷怪蛋"
+    price: 250.00
+  SULFUR_CUBE_SPAWN_EGG:
+    enabled: true
+    name: "&f硫方怪刷怪蛋"
+    price: 500.00
+  TADPOLE_SPAWN_EGG:
+    enabled: true
+    name: "&f蝌蚪刷怪蛋"
+    price: 100.00
+  TRADER_LLAMA_SPAWN_EGG:
+    enabled: true
+    name: "&f行商羊驼刷怪蛋"
+    price: 350.00
+  TROPICAL_FISH_SPAWN_EGG:
+    enabled: true
+    name: "&f热带鱼刷怪蛋"
+    price: 100.00
+  TURTLE_SPAWN_EGG:
+    enabled: true
+    name: "&f海龟刷怪蛋"
+    price: 220.00
+  VEX_SPAWN_EGG:
+    enabled: true
+    name: "&f恼鬼刷怪蛋"
+    price: 600.00
+  VILLAGER_SPAWN_EGG:
+    enabled: true
+    name: "&f村民刷怪蛋"
+    price: 1000.00
+  VINDICATOR_SPAWN_EGG:
+    enabled: true
+    name: "&f卫道士刷怪蛋"
+    price: 500.00
+  WANDERING_TRADER_SPAWN_EGG:
+    enabled: true
+    name: "&f流浪商人刷怪蛋"
+    price: 1200.00
+  WARDEN_SPAWN_EGG:
+    enabled: false
+    name: "&4监守者刷怪蛋"
+    price: 5000.00
+  WITCH_SPAWN_EGG:
+    enabled: true
+    name: "&f女巫刷怪蛋"
+    price: 600.00
+  WITHER_SKELETON_SPAWN_EGG:
+    enabled: true
+    name: "&f凋灵骷髅刷怪蛋"
+    price: 900.00
+  WITHER_SPAWN_EGG:
+    enabled: false
+    name: "&4凋灵刷怪蛋"
+    price: 10000.00
+  WOLF_SPAWN_EGG:
+    enabled: true
+    name: "&f狼刷怪蛋"
+    price: 180.00
+  ZOGLIN_SPAWN_EGG:
+    enabled: true
+    name: "&f僵尸疣猪兽刷怪蛋"
+    price: 450.00
+  ZOMBIE_HORSE_SPAWN_EGG:
+    enabled: true
+    name: "&f僵尸马刷怪蛋"
+    price: 700.00
+  ZOMBIE_NAUTILUS_SPAWN_EGG:
+    enabled: true
+    name: "&f僵尸鹦鹉螺刷怪蛋"
+    price: 600.00
+  ZOMBIE_SPAWN_EGG:
+    enabled: true
+    name: "&f僵尸刷怪蛋"
+    price: 150.00
+  ZOMBIE_VILLAGER_SPAWN_EGG:
+    enabled: true
+    name: "&f僵尸村民刷怪蛋"
+    price: 600.00
+  ZOMBIFIED_PIGLIN_SPAWN_EGG:
+    enabled: true
+    name: "&f僵尸猪灵刷怪蛋"
+    price: 250.00
