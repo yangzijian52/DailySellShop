@@ -156,6 +156,7 @@ Maven 只对 `plugin.yml` 执行版本变量替换；玩家配置不会经过资
 
 ## SpigotMC 发布资料
 
+- [DailySellShop on SpigotMC](https://www.spigotmc.org/resources/dailysellshop.137013/)
 - [SpigotMC 资源介绍 BBCode](docs/SPIGOTMC-RESOURCE.md)
 - [SpigotMC 完整文档 BBCode](docs/SPIGOTMC-RESOURCE-BBCODE.txt)
 - [SpigotMC 手动发布清单](docs/SPIGOTMC_MANUAL_PUBLISHING.md)
