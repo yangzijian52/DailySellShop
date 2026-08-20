@@ -7,9 +7,9 @@
 - Java 玩家使用箱子 GUI
 - Geyser/Floodgate 基岩玩家使用功能对应的表单
 
-当前版本：`2.0.0`
+当前版本：`2.1.0`
 
-验证状态：已在 Paper 26.2 服务器完成插件加载、Java 菜单、收购与购买交易流程实测。
+验证状态：2.0.0 已在 Paper 26.2 服务器完成插件加载、Java 菜单、收购与购买交易流程实测；2.1.0 已通过干净构建、配置解析和产物检查，新增的按组/按盒流程发布后仍建议在正式服更新前于测试服复核。
 
 ## 功能
 
@@ -28,7 +28,8 @@
 - 1477 个可交易商品，按照 Mojang 26.2 创造模式目录分类和排序
 - 20 种最高等级普通药水和 43 本最高等级附魔书，统一购买价和收购价为 `10`
 - 88 种刷怪蛋独立配置；Boss 和高风险实体默认关闭
-- 支持分页、中文名/Material 搜索、预设数量、自定义数量和二次确认
+- 支持按个、按组、按整盒潜影盒购买，三种单位均提供预设数量、自定义数量和二次确认
+- 组数按物品实际堆叠上限换算；每盒装满 27 组，价格只按盒内商品总数计算
 - 自定义输入支持超时、移动、切换世界、死亡和退出取消，输入错误可重试一次
 - 背包空间不足时只购买能够放入的数量，不会把剩余物品丢到地面
 - 扣款后发放失败会恢复背包并自动退款
@@ -49,23 +50,30 @@ Vault 或经济插件不可用时，插件仍会启用且购买菜单可以浏�
 
 1. 安装 Vault 和一个 Vault 兼容经济插件。
 2. 如需基岩版表单，安装 Geyser 与 Floodgate。
-3. 将 `DailySellShop-2.0.0.jar` 放入服务端 `plugins` 目录。
+3. 将 `DailySellShop-2.1.0.jar` 放入服务端 `plugins` 目录。
 4. 启动服务器。插件首次启动会生成 `SellShopconfig.yml` 和 `shopconfig.yml`。
 5. 修改配置后执行 `/dss reload` 或 `/ds reload`。
 
 两条重载命令都会重新读取两份配置。重载会取消正在等待自定义数量输入的交易。
 
+### 从 2.0.0 升级
+
+1. 停止服务器并备份 `plugins/DailySellShop`。
+2. 替换为 2.1.0 JAR。
+3. 将新版 `shopconfig.yml` 中的 `settings.custom-stack-max`、`settings.custom-box-max`、`spawn-egg-defaults.max-stacks`、`spawn-egg-defaults.max-boxes` 和完整的 `menus.amount` 节点同步到现有配置。
+4. 启动服务器并测试按个、按组、按盒各一次；潜影盒商品自身不会显示盒装购买选项。
+
 ## 从 1.x 升级
 
 升级前先停止服务器，并备份 `plugins/DailySellShop`。
 
-1. 用 2.0.0 JAR 替换旧插件。
+1. 用 2.1.0 JAR 替换旧插件。
 2. 将原 `config.yml` 的自定义菜单和刷新设置迁移到 `SellShopconfig.yml`。
 3. 同步发行包中的新增商品、价格、药水和附魔书节点。
 4. 根据服务器需求调整新的 `shopconfig.yml`。
 5. 启动服务器并检查控制台加载数量，再分别测试一次 `/ds` 出售和 `/dss` 购买。
 
-> **重要：** 插件不会覆盖已经存在的 `SellShopconfig.yml` 或 `shopconfig.yml`。首次迁移时可以把旧 `config.yml` 复制为 `SellShopconfig.yml`，但这只完成文件改名，不会自动合并 2.0.0 新增的商品和价格。升级现有服务器必须手动同步本次配置内容，否则新商品和价格不会生效。
+> **重要：** 插件不会覆盖已经存在的 `SellShopconfig.yml` 或 `shopconfig.yml`。首次迁移时可以把旧 `config.yml` 复制为 `SellShopconfig.yml`，但这只完成文件改名，不会自动合并新版本增加的商品、价格和菜单节点。升级现有服务器必须手动同步本次配置内容，否则新商品、价格和三排购买菜单不会生效。
 
 ## 配置文件
 
@@ -102,7 +110,7 @@ commands:
 
 还支持 `[op] command`，该动作会临时授予玩家 OP 后执行命令，只应在受信任的服务器配置中使用。
 
-常用占位符：`{player}`、`{balance}`、`{item}`、`{material}`、`{price}`、`{amount}`、`{total}`、`{slots}`、`{capacity}`、`{count}`、`{page}`、`{pages}`。
+常用占位符：`{player}`、`{balance}`、`{item}`、`{material}`、`{price}`、`{count}`、`{unit}`、`{amount}`、`{total}`、`{slots}`、`{capacity}`、`{page}`、`{pages}`。
 
 ## 命令与权限
 
@@ -132,7 +140,7 @@ commands:
 plugins/DailySellShop/logs/purchases.log
 ```
 
-每条记录包含时间、UUID、玩家名、商品键、数量、单价和总价。可在 `shopconfig.yml` 中关闭文件日志或额外输出到控制台。
+每条记录包含时间、UUID、玩家名、商品键、购买单位、单位数、物品总数、单价和总价。可在 `shopconfig.yml` 中关闭文件日志或额外输出到控制台。
 
 ## 构建
 
@@ -145,7 +153,7 @@ mvn clean package
 构建产物：
 
 ```text
-target/DailySellShop-2.0.0.jar
+target/DailySellShop-2.1.0.jar
 ```
 
 Maven 只对 `plugin.yml` 执行版本变量替换；玩家配置不会经过资源过滤，因此 `${price}` 等菜单占位符会保持原样。

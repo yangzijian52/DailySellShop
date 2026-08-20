@@ -75,7 +75,11 @@ public class BuyShopManager {
                 continue;
             }
 
-            BigDecimal sellPrice = decimal(section.get(rawKey + ".price"), BigDecimal.ZERO);
+            BigDecimal sellPrice = decimal(section.get(rawKey + ".price"), null);
+            if (sellPrice == null) {
+                plugin.getLogger().warning("忽略购买价无效的商品: " + key);
+                continue;
+            }
             BigDecimal price = sellPrice.multiply(multiplier);
             if (plugin.getShopConfig().contains(overridePath + "price")) {
                 price = decimal(plugin.getShopConfig().get(overridePath + "price"), price);
@@ -111,7 +115,7 @@ public class BuyShopManager {
                     : creativeOrder.getOrDefault(key, 1_000_000);
             String permission = plugin.getShopConfig().getString(overridePath + "permission", "");
             addProduct(new BuyProduct(key, material, DailySellShop.colorize(displayName), price,
-                    category, false, weight, 0, permission, template));
+                    category, false, weight, 0, 0, 0, permission, template));
         }
     }
 
@@ -135,7 +139,12 @@ public class BuyShopManager {
                 continue;
             }
 
-            BigDecimal price = money(decimal(plugin.getShopConfig().get(path + "price"), BigDecimal.ZERO));
+            BigDecimal configuredPrice = decimal(plugin.getShopConfig().get(path + "price"), null);
+            if (configuredPrice == null) {
+                plugin.getLogger().warning("忽略购买价无效的刷怪蛋: " + key);
+                continue;
+            }
+            BigDecimal price = money(configuredPrice);
             if (price.signum() < 0) {
                 plugin.getLogger().warning("忽略负数刷怪蛋价格: " + key);
                 continue;
@@ -147,6 +156,12 @@ public class BuyShopManager {
                     + creativeOrder.getOrDefault(key, 1_000_000);
             int maxAmount = Math.max(1, plugin.getShopConfig().getInt(path + "max-amount",
                     plugin.getShopConfig().getInt("spawn-egg-defaults.max-amount", getCustomAmountMax())));
+            int maxStacks = Math.max(1, plugin.getShopConfig().getInt(path + "max-stacks",
+                    plugin.getShopConfig().getInt("spawn-egg-defaults.max-stacks",
+                            plugin.getShopConfig().getInt("settings.custom-stack-max", 36))));
+            int maxBoxes = Math.max(1, plugin.getShopConfig().getInt(path + "max-boxes",
+                    plugin.getShopConfig().getInt("spawn-egg-defaults.max-boxes",
+                            plugin.getShopConfig().getInt("settings.custom-box-max", 36))));
             boolean requirePermission = plugin.getShopConfig().getBoolean(path + "require-permission",
                     plugin.getShopConfig().getBoolean("spawn-egg-defaults.require-permission", false));
             String permission = requirePermission
@@ -154,7 +169,7 @@ public class BuyShopManager {
                     plugin.getShopConfig().getString("spawn-egg-defaults.permission", "dailysellshop.shop.spawnegg"))
                     : "";
             addProduct(new BuyProduct(key, material, displayName, price, ShopCategory.SPAWN_EGGS,
-                    true, weight, maxAmount, permission, new ItemStack(material)));
+                    true, weight, maxAmount, maxStacks, maxBoxes, permission, new ItemStack(material)));
         }
     }
 
@@ -242,6 +257,34 @@ public class BuyShopManager {
             return Math.min(getCustomAmountMax(), product.maxAmount());
         }
         return getCustomAmountMax();
+    }
+
+    public int getMaxSelection(BuyProduct product, PurchaseUnit unit) {
+        int configured = switch (unit) {
+            case ITEM -> getCustomAmountMax();
+            case STACK -> Math.max(1, plugin.getShopConfig().getInt("settings.custom-stack-max", 36));
+            case BOX -> Math.max(1, plugin.getShopConfig().getInt("settings.custom-box-max", 36));
+        };
+        if (product == null) {
+            return configured;
+        }
+        int productLimit = switch (unit) {
+            case ITEM -> product.maxAmount();
+            case STACK -> product.maxStacks();
+            case BOX -> product.maxBoxes();
+        };
+        return productLimit > 0 ? Math.min(configured, productLimit) : configured;
+    }
+
+    public boolean supportsUnit(BuyProduct product, PurchaseUnit unit) {
+        if (product == null || getMaxSelection(product, unit) < 1) {
+            return false;
+        }
+        if (unit != PurchaseUnit.BOX) {
+            return true;
+        }
+        return product.material() != Material.SHULKER_BOX
+                && !product.material().name().endsWith("_SHULKER_BOX");
     }
 
     public static BigDecimal money(BigDecimal value) {

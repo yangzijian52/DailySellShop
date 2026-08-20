@@ -5,6 +5,8 @@ import org.bukkit.Location;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.block.ShulkerBox;
+import org.bukkit.inventory.meta.BlockStateMeta;
 import org.bukkit.scheduler.BukkitTask;
 
 import java.io.File;
@@ -41,16 +43,17 @@ public class PurchaseManager {
         this.plugin = plugin;
     }
 
-    public void startCustomInput(Player player, String productKey, boolean bedrock) {
+    public void startCustomInput(Player player, String productKey, PurchaseUnit unit, boolean bedrock) {
         BuyProduct product = plugin.getBuyShopManager().getProduct(productKey);
-        if (product == null || !plugin.getBuyShopManager().canView(player, product)) {
+        if (product == null || !plugin.getBuyShopManager().canView(player, product)
+                || !plugin.getBuyShopManager().supportsUnit(product, unit)) {
             send(player, "messages.product-unavailable", "&c该商品已下架或你没有购买权限。");
             return;
         }
 
         cancel(player, null);
         int timeoutSeconds = Math.max(1, plugin.getShopConfig().getInt("settings.custom-input-timeout-seconds", 60));
-        PendingInput pending = new PendingInput(product.key(), player.getLocation().clone(),
+        PendingInput pending = new PendingInput(product.key(), unit, player.getLocation().clone(),
                 System.currentTimeMillis() + timeoutSeconds * 1000L, bedrock);
         pending.timeoutTask = Bukkit.getScheduler().runTaskLater(plugin, () -> {
             PendingInput current = pendingInputs.get(player.getUniqueId());
@@ -62,12 +65,12 @@ public class PurchaseManager {
         pendingInputs.put(player.getUniqueId(), pending);
 
         if (bedrock) {
-            BuyShopGui.openBedrockCustomInput(player, product, false);
+            BuyShopGui.openBedrockCustomInput(player, product, unit, false);
         } else {
             player.closeInventory();
             send(player, "messages.custom-prompt",
-                    "&e请在 {seconds} 秒内输入购买数量，输入 cancel 或 取消可取消交易。",
-                    "{seconds}", String.valueOf(timeoutSeconds));
+                    "&e请在 {seconds} 秒内输入购买{unit}数，输入 cancel 或 取消可取消交易。",
+                    "{seconds}", String.valueOf(timeoutSeconds), "{unit}", unit.displayName());
         }
     }
 
@@ -100,14 +103,14 @@ public class PurchaseManager {
         }
 
         BuyProduct product = plugin.getBuyShopManager().getProduct(pending.productKey);
-        int max = plugin.getBuyShopManager().getMaxAmount(product);
+        int max = plugin.getBuyShopManager().getMaxSelection(product, pending.unit);
         if (product == null || amount <= 0 || amount > max) {
             invalidInput(player, pending);
             return;
         }
 
         completePending(player, pending);
-        BuyShopGui.openPurchaseConfirmation(player, product, amount);
+        BuyShopGui.openPurchaseConfirmation(player, product, pending.unit, amount);
     }
 
     private void invalidInput(Player player, PendingInput pending) {
@@ -117,15 +120,15 @@ public class PurchaseManager {
             return;
         }
 
-        int max = plugin.getBuyShopManager().getMaxAmount(
-                plugin.getBuyShopManager().getProduct(pending.productKey));
+        int max = plugin.getBuyShopManager().getMaxSelection(
+                plugin.getBuyShopManager().getProduct(pending.productKey), pending.unit);
         send(player, "messages.custom-invalid",
                 "&c输入无效，请输入 1 至 {max} 的整数。你还可以重试一次。",
                 "{max}", String.valueOf(max));
         if (pending.bedrock) {
             BuyProduct product = plugin.getBuyShopManager().getProduct(pending.productKey);
             if (product != null) {
-                BuyShopGui.openBedrockCustomInput(player, product, true);
+                BuyShopGui.openBedrockCustomInput(player, product, pending.unit, true);
             }
         }
     }
@@ -177,9 +180,9 @@ public class PurchaseManager {
         }
     }
 
-    public boolean purchase(Player player, String productKey, int requestedAmount) {
+    public boolean purchase(Player player, String productKey, PurchaseUnit unit, int requestedCount) {
         if (!Bukkit.isPrimaryThread()) {
-            Bukkit.getScheduler().runTask(plugin, () -> purchase(player, productKey, requestedAmount));
+            Bukkit.getScheduler().runTask(plugin, () -> purchase(player, productKey, unit, requestedCount));
             return false;
         }
         if (!processing.add(player.getUniqueId())) {
@@ -197,8 +200,12 @@ public class PurchaseManager {
             if (product.spawnEgg() && !player.hasPermission("dailysellshop.shop.spawnegg")) {
                 return fail(player, "messages.no-permission", "&c你没有购买刷怪蛋的权限。");
             }
-            int max = plugin.getBuyShopManager().getMaxAmount(product);
-            if (requestedAmount <= 0 || requestedAmount > max) {
+            if (!plugin.getBuyShopManager().supportsUnit(product, unit)) {
+                return fail(player, "messages.unit-unavailable", "&c该商品不支持按{unit}购买。",
+                        "{unit}", unit.displayName());
+            }
+            int max = plugin.getBuyShopManager().getMaxSelection(product, unit);
+            if (requestedCount <= 0 || requestedCount > max) {
                 return fail(player, "messages.invalid-amount", "&c购买数量必须在 1 至 {max} 之间。",
                         "{max}", String.valueOf(max));
             }
@@ -206,13 +213,18 @@ public class PurchaseManager {
                 return fail(player, "messages.economy-unavailable", "&c经济系统当前不可用，暂时无法购买。");
             }
 
-            int capacity = calculateCapacity(player, product);
+            int capacity = calculateCapacity(player, product, unit);
             if (capacity <= 0) {
                 return fail(player, "messages.inventory-full", "&c背包没有空间，无法购买该商品。");
             }
-            int finalAmount = Math.min(requestedAmount, capacity);
+            int finalCount = Math.min(requestedCount, capacity);
+            int finalAmount = unit.itemAmount(product, finalCount);
             BigDecimal total = BuyShopManager.money(product.price().multiply(BigDecimal.valueOf(finalAmount)));
-            if (!DailySellShop.getEconomy().has(player, total.doubleValue())) {
+            double charge = total.doubleValue();
+            if (!Double.isFinite(charge) || charge < 0.0) {
+                return fail(player, "messages.invalid-price", "&c该商品价格超出经济系统支持范围，请联系管理员。");
+            }
+            if (!DailySellShop.getEconomy().has(player, charge)) {
                 return fail(player, "messages.insufficient-funds",
                         "&c余额不足，需要 ${total}，当前余额 ${balance}。",
                         "{total}", BuyShopManager.formatMoney(total),
@@ -220,34 +232,50 @@ public class PurchaseManager {
             }
 
             ItemStack[] snapshot = cloneStorage(player.getInventory().getStorageContents());
-            EconomyService.TransactionResult withdrawal = DailySellShop.getEconomy().withdraw(player, total.doubleValue());
+            EconomyService.TransactionResult withdrawal = DailySellShop.getEconomy().withdraw(player, charge);
             if (!withdrawal.success()) {
                 return fail(player, "messages.withdraw-failed", "&c扣款失败：{error}",
                         "{error}", withdrawal.errorMessage() == null ? "未知错误" : withdrawal.errorMessage());
             }
 
-            if (!giveItems(player, product, finalAmount)) {
+            boolean delivered;
+            try {
+                delivered = giveItems(player, product, unit, finalCount);
+            } catch (RuntimeException exception) {
+                delivered = false;
+                plugin.getLogger().severe("购买物品生成或发放异常: " + player.getUniqueId()
+                        + " " + product.key() + " " + unit.id() + " x" + finalCount
+                        + " 原因=" + exception.getMessage());
+            }
+            if (!delivered) {
                 player.getInventory().setStorageContents(snapshot);
-                EconomyService.TransactionResult refund = DailySellShop.getEconomy().deposit(player, total.doubleValue());
+                EconomyService.TransactionResult refund = DailySellShop.getEconomy().deposit(player, charge);
                 if (!refund.success()) {
                     plugin.getLogger().severe("购买发放失败且自动退款失败: " + player.getUniqueId()
                             + " " + product.key() + " $" + total + " 原因=" + refund.errorMessage());
+                    return fail(player, "messages.refund-failed",
+                            "&c物品发放失败且退款未成功，请立即联系管理员处理。交易金额：${total}",
+                            "{total}", BuyShopManager.formatMoney(total));
                 }
                 return fail(player, "messages.delivery-failed", "&c物品发放失败，款项已自动退回。");
             }
 
-            writeTransactionLog(player, product, finalAmount, total);
+            writeTransactionLog(player, product, unit, finalCount, finalAmount, total);
             send(player, "messages.purchase-success",
-                    "&a成功购买 {amount} 个 {item}，花费 ${total}，剩余 ${balance}。",
+                    "&a成功购买 {count} {unit}（{amount} 个）{item}，花费 ${total}，剩余 ${balance}。",
+                    "{count}", String.valueOf(finalCount),
+                    "{unit}", unit.displayName(),
                     "{amount}", String.valueOf(finalAmount),
                     "{item}", product.displayName(),
                     "{total}", BuyShopManager.formatMoney(total),
                     "{balance}", formatBalance(player));
-            if (finalAmount < requestedAmount) {
+            if (finalCount < requestedCount) {
                 send(player, "messages.partial-purchase",
-                        "&e背包空间不足，原计划购买 {requested} 个，实际购买 {amount} 个。",
-                        "{requested}", String.valueOf(requestedAmount),
-                        "{amount}", String.valueOf(finalAmount));
+                        "&e背包空间不足，原计划购买 {requested} {unit}，实际购买 {count} {unit}。",
+                        "{requested}", String.valueOf(requestedCount),
+                        "{count}", String.valueOf(finalCount),
+                        "{amount}", String.valueOf(finalAmount),
+                        "{unit}", unit.displayName());
             }
             playConfiguredSound(player, "sounds.purchase-success", "ENTITY_PLAYER_LEVELUP");
             return true;
@@ -270,12 +298,38 @@ public class PurchaseManager {
         return (int) Math.min(Integer.MAX_VALUE, capacity);
     }
 
+    public int calculateCapacity(Player player, BuyProduct product, PurchaseUnit unit) {
+        if (unit == PurchaseUnit.BOX) {
+            int emptySlots = 0;
+            for (ItemStack item : player.getInventory().getStorageContents()) {
+                if (item == null || item.getType().isAir()) {
+                    emptySlots++;
+                }
+            }
+            return emptySlots;
+        }
+        return calculateCapacity(player, product) / unit.itemAmount(product, 1);
+    }
+
     public int requiredSlots(BuyProduct product, int amount) {
         int stackSize = product.createItem(1).getMaxStackSize();
         return (int) Math.ceil(amount / (double) stackSize);
     }
 
-    private boolean giveItems(Player player, BuyProduct product, int amount) {
+    public int requiredSlots(BuyProduct product, PurchaseUnit unit, int count) {
+        return unit == PurchaseUnit.BOX ? count : requiredSlots(product, unit.itemAmount(product, count));
+    }
+
+    private boolean giveItems(Player player, BuyProduct product, PurchaseUnit unit, int count) {
+        if (unit == PurchaseUnit.BOX) {
+            for (int index = 0; index < count; index++) {
+                if (!player.getInventory().addItem(createFilledShulkerBox(product)).isEmpty()) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        int amount = unit.itemAmount(product, count);
         int maxStack = product.createItem(1).getMaxStackSize();
         int remaining = amount;
         while (remaining > 0) {
@@ -290,6 +344,22 @@ public class PurchaseManager {
         return true;
     }
 
+    private ItemStack createFilledShulkerBox(BuyProduct product) {
+        ItemStack box = new ItemStack(org.bukkit.Material.SHULKER_BOX);
+        BlockStateMeta meta = (BlockStateMeta) box.getItemMeta();
+        ShulkerBox state = (ShulkerBox) meta.getBlockState();
+        int stackSize = product.createItem(1).getMaxStackSize();
+        ItemStack[] contents = new ItemStack[27];
+        for (int slot = 0; slot < contents.length; slot++) {
+            contents[slot] = product.createItem(stackSize);
+        }
+        state.getInventory().setContents(contents);
+        meta.setBlockState(state);
+        meta.setDisplayName(DailySellShop.colorize("&f" + BuyShopManager.stripColor(product.displayName()) + " &7(满盒)"));
+        box.setItemMeta(meta);
+        return box;
+    }
+
     private ItemStack[] cloneStorage(ItemStack[] contents) {
         ItemStack[] clone = new ItemStack[contents.length];
         for (int i = 0; i < contents.length; i++) {
@@ -298,12 +368,13 @@ public class PurchaseManager {
         return clone;
     }
 
-    private void writeTransactionLog(Player player, BuyProduct product, int amount, BigDecimal total) {
+    private void writeTransactionLog(Player player, BuyProduct product, PurchaseUnit unit, int count,
+                                     int amount, BigDecimal total) {
         if (!plugin.getShopConfig().getBoolean("logging.enabled", true)) {
             return;
         }
         String line = Instant.now() + "\t" + player.getUniqueId() + "\t" + safe(player.getName())
-                + "\t" + product.key() + "\t" + amount + "\t" + product.price()
+                + "\t" + product.key() + "\t" + unit.id() + "\t" + count + "\t" + amount + "\t" + product.price()
                 + "\t" + total + System.lineSeparator();
         String configuredPath = plugin.getShopConfig().getString("logging.file", "logs/purchases.log");
         File logFile = new File(plugin.getDataFolder(), configuredPath);
@@ -327,7 +398,7 @@ public class PurchaseManager {
         }
         if (plugin.getShopConfig().getBoolean("logging.console", false)) {
             plugin.getLogger().info("购买记录: " + player.getName() + " " + product.key()
-                    + " x" + amount + " $" + total);
+                    + " " + count + unit.displayName() + " (x" + amount + ") $" + total);
         }
     }
 
@@ -396,14 +467,16 @@ public class PurchaseManager {
 
     private static class PendingInput {
         private final String productKey;
+        private final PurchaseUnit unit;
         private final Location origin;
         private final long expiresAt;
         private final boolean bedrock;
         private int invalidAttempts;
         private BukkitTask timeoutTask;
 
-        private PendingInput(String productKey, Location origin, long expiresAt, boolean bedrock) {
+        private PendingInput(String productKey, PurchaseUnit unit, Location origin, long expiresAt, boolean bedrock) {
             this.productKey = productKey;
+            this.unit = unit;
             this.origin = origin;
             this.expiresAt = expiresAt;
             this.bedrock = bedrock;

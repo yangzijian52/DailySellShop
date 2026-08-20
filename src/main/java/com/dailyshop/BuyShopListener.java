@@ -66,19 +66,22 @@ public class BuyShopListener implements Listener {
             case BuyShopGui.ACTION_AMOUNT -> {
                 BuyProduct product = plugin.getBuyShopManager().getProduct(
                         BuyShopGui.getString(data, "buy_product"));
-                Integer amount = BuyShopGui.getInt(data, "buy_amount");
-                if (product != null && amount != null) {
-                    BuyShopGui.openAmount(player, product, amount);
+                Integer count = BuyShopGui.getInt(data, "buy_count");
+                PurchaseUnit unit = PurchaseUnit.fromId(BuyShopGui.getString(data, "buy_unit"));
+                if (product != null && count != null) {
+                    BuyShopGui.openAmount(player, product, unit, count);
                 }
             }
             case BuyShopGui.ACTION_CUSTOM -> {
                 String productKey = BuyShopGui.getString(data, "buy_product");
-                plugin.getPurchaseManager().startCustomInput(player, productKey, false);
+                PurchaseUnit unit = PurchaseUnit.fromId(BuyShopGui.getString(data, "buy_unit"));
+                plugin.getPurchaseManager().startCustomInput(player, productKey, unit, false);
             }
             case BuyShopGui.ACTION_CONFIRM -> {
                 String productKey = BuyShopGui.getString(data, "buy_product");
-                Integer amount = BuyShopGui.getInt(data, "buy_amount");
-                if (amount != null && plugin.getPurchaseManager().purchase(player, productKey, amount)) {
+                Integer count = BuyShopGui.getInt(data, "buy_count");
+                PurchaseUnit unit = PurchaseUnit.fromId(BuyShopGui.getString(data, "buy_unit"));
+                if (count != null && plugin.getPurchaseManager().purchase(player, productKey, unit, count)) {
                     BuyProduct product = plugin.getBuyShopManager().getProduct(productKey);
                     if (product != null) {
                         BuyShopGui.openCategory(player, product.category(), 0);

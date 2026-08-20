@@ -14,6 +14,8 @@ public record BuyProduct(
         boolean spawnEgg,
         int weight,
         int maxAmount,
+        int maxStacks,
+        int maxBoxes,
         String permission,
         ItemStack template) {
 

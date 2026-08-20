@@ -9,6 +9,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
@@ -84,6 +85,11 @@ public class ShopListener implements Listener {
         }
     }
 
+    @EventHandler
+    public void onQuit(PlayerQuitEvent event) {
+        ShopGui.unregisterShop(event.getPlayer());
+    }
+
     public static void executeButton(Player player, String buttonId) {
         if (buttonId == null || buttonId.isBlank()) {
             return;
@@ -157,6 +163,13 @@ public class ShopListener implements Listener {
         BigDecimal totalMoney = BigDecimal.valueOf(configuredPrice)
                 .multiply(BigDecimal.valueOf(finalAmount))
                 .setScale(2, RoundingMode.HALF_UP);
+        double depositAmount = totalMoney.doubleValue();
+        if (!Double.isFinite(depositAmount) || depositAmount < 0.0) {
+            plugin.getLogger().warning("拒绝超出经济系统范围的收购金额: " + itemKey + " -> " + totalMoney);
+            player.sendMessage(DailySellShop.colorize(plugin.getSellConfig().getString("messages.prefix", ""))
+                    + "§c该商品价格超出经济系统支持范围，请联系管理员。");
+            return;
+        }
         ItemStack[] snapshot = cloneStorage(player.getInventory().getStorageContents());
 
         ItemStack toRemove = template.clone();
@@ -168,7 +181,7 @@ public class ShopListener implements Listener {
             return;
         }
 
-        EconomyService.TransactionResult deposit = DailySellShop.getEconomy().deposit(player, totalMoney.doubleValue());
+        EconomyService.TransactionResult deposit = DailySellShop.getEconomy().deposit(player, depositAmount);
         if (!deposit.success()) {
             player.getInventory().setStorageContents(snapshot);
             String error = deposit.errorMessage() == null || deposit.errorMessage().isBlank()

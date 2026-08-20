@@ -84,24 +84,28 @@ public final class BuyShopGui {
     }
 
     public static void openAmount(Player player, BuyProduct product, int selectedAmount) {
+        openAmount(player, product, PurchaseUnit.ITEM, selectedAmount);
+    }
+
+    public static void openAmount(Player player, BuyProduct product, PurchaseUnit unit, int selectedCount) {
         if (product == null) {
             return;
         }
         if (isBedrock(player)) {
             openBedrockAmounts(player, product);
         } else {
-            openJavaAmount(player, product, selectedAmount);
+            openJavaAmount(player, product, unit, selectedCount);
         }
     }
 
-    public static void openPurchaseConfirmation(Player player, BuyProduct product, int amount) {
+    public static void openPurchaseConfirmation(Player player, BuyProduct product, PurchaseUnit unit, int count) {
         if (product == null) {
             return;
         }
         if (isBedrock(player)) {
-            openBedrockConfirmation(player, product, amount);
+            openBedrockConfirmation(player, product, unit, count);
         } else {
-            openJavaAmount(player, product, amount);
+            openJavaAmount(player, product, unit, count);
         }
     }
 
@@ -211,61 +215,48 @@ public final class BuyShopGui {
         openInventory(player, inventory);
     }
 
-    private static void openJavaAmount(Player player, BuyProduct product, int selectedAmount) {
+    private static void openJavaAmount(Player player, BuyProduct product, PurchaseUnit selectedUnit,
+                                       int selectedCount) {
         DailySellShop plugin = DailySellShop.getInstance();
-        PurchaseManager purchases = plugin.getPurchaseManager();
         int size = menuSize(plugin.getShopConfig().getInt("menus.amount.size", 54));
         String title = color(plugin.getShopConfig().getString("menus.amount.title", "&0选择购买数量"));
         Inventory inventory = Bukkit.createInventory(null, size, title);
-        int max = plugin.getBuyShopManager().getMaxAmount(product);
 
         List<String> summaryLore = configuredLore("menus.amount.summary-lore", List.of(
                 "&7单价: &a${price}",
-                "&7已选数量: &f{amount}",
+                "&7已选: &f{count} {unit}（{amount} 个）",
                 "&7总价: &6${total}",
                 "&7预计占用: &f{slots} 个背包格",
                 "&7当前余额: &f${balance}"));
         ItemStack summary = createItem(product.createItem(1), product.displayName(), summaryLore,
-                placeholders(player, product, selectedAmount), ACTION_NONE);
-        setIfValid(inventory, summary, plugin.getShopConfig().getInt("menus.amount.summary-slot", 13));
+                placeholders(player, product, selectedUnit, selectedCount), ACTION_NONE);
+        int summarySlot = plugin.getShopConfig().isConfigurationSection("menus.amount.rows")
+                ? plugin.getShopConfig().getInt("menus.amount.summary-slot", 4)
+                : 4;
+        setIfValid(inventory, summary, summarySlot);
 
-        List<Integer> presets = plugin.getShopConfig().getIntegerList("menus.amount.presets");
-        if (presets.isEmpty()) {
-            presets = List.of(1, 5, 10, 20, 30, 40, 50, 64);
-        }
-        List<Integer> presetSlots = itemSlots("menus.amount.preset-slots",
-                List.of(19, 20, 21, 22, 23, 24, 25, 26));
-        for (int index = 0; index < Math.min(presets.size(), presetSlots.size()); index++) {
-            int amount = presets.get(index);
-            if (amount <= 0 || amount > max) {
-                continue;
-            }
-            BigDecimal total = BuyShopManager.money(product.price().multiply(BigDecimal.valueOf(amount)));
-            ItemStack preset = configuredButton("menus.amount.preset-button", Material.LIME_STAINED_GLASS_PANE,
-                    "&a购买 {amount} 个", List.of("&7总价: &f${total}", "", "&e点击选择"),
-                    player, ACTION_AMOUNT, Map.of("{amount}", String.valueOf(amount),
-                            "{total}", BuyShopManager.formatMoney(total)));
-            setString(preset, "buy_product", product.key());
-            setInt(preset, "buy_amount", amount);
-            setIfValid(inventory, preset, presetSlots.get(index));
-        }
+        renderAmountRow(inventory, player, product, PurchaseUnit.ITEM, "menus.amount.rows.item",
+                List.of(1, 5, 10, 20, 30, 64), List.of(10, 11, 12, 13, 14, 15), 16,
+                Material.LIME_STAINED_GLASS_PANE);
+        renderAmountRow(inventory, player, product, PurchaseUnit.STACK, "menus.amount.rows.stack",
+                List.of(1, 3, 5, 10, 20, 30), List.of(19, 20, 21, 22, 23, 24), 25,
+                Material.CYAN_STAINED_GLASS_PANE);
+        renderAmountRow(inventory, player, product, PurchaseUnit.BOX, "menus.amount.rows.box",
+                List.of(1, 2, 3, 4, 5, 10), List.of(28, 29, 30, 31, 32, 33), 34,
+                Material.SHULKER_BOX);
 
-        ItemStack custom = configuredButton("menus.amount.buttons.custom", Material.WRITABLE_BOOK,
-                "&b自定义数量", List.of("&7范围: 1 - {max}", "&7输入期间移动超过 {distance} 格将取消"),
-                player, ACTION_CUSTOM, Map.of("{max}", String.valueOf(max),
-                        "{distance}", formatNumber(plugin.getShopConfig().getDouble(
-                                "settings.custom-input-cancel-distance", 2.0))));
-        setString(custom, "buy_product", product.key());
-        setIfValid(inventory, custom, plugin.getShopConfig().getInt("menus.amount.buttons.custom.slot", 31));
-
-        if (selectedAmount > 0 && selectedAmount <= max) {
-            BigDecimal total = BuyShopManager.money(product.price().multiply(BigDecimal.valueOf(selectedAmount)));
+        int max = plugin.getBuyShopManager().getMaxSelection(product, selectedUnit);
+        if (plugin.getBuyShopManager().supportsUnit(product, selectedUnit)
+                && selectedCount > 0 && selectedCount <= max) {
+            int itemAmount = selectedUnit.itemAmount(product, selectedCount);
+            BigDecimal total = BuyShopManager.money(product.price().multiply(BigDecimal.valueOf(itemAmount)));
             ItemStack confirm = configuredButton("menus.amount.buttons.confirm", Material.EMERALD_BLOCK,
-                    "&a确认购买 {amount} 个", List.of("&7总价: &f${total}", "", "&a点击确认扣款"),
-                    player, ACTION_CONFIRM, Map.of("{amount}", String.valueOf(selectedAmount),
-                            "{total}", BuyShopManager.formatMoney(total)));
+                    "&a确认购买 {count} {unit}",
+                    List.of("&7共 {amount} 个物品", "&7总价: &f${total}", "", "&a点击确认扣款"),
+                    player, ACTION_CONFIRM, placeholders(player, product, selectedUnit, selectedCount));
             setString(confirm, "buy_product", product.key());
-            setInt(confirm, "buy_amount", selectedAmount);
+            setString(confirm, "buy_unit", selectedUnit.id());
+            setInt(confirm, "buy_count", selectedCount);
             setIfValid(inventory, confirm,
                     plugin.getShopConfig().getInt("menus.amount.buttons.confirm.slot", 40));
         }
@@ -281,6 +272,47 @@ public final class BuyShopGui {
                 Set.of("custom", "confirm", "back", "close"), player);
         fillEmpty(inventory, "menus.amount.fill");
         openInventory(player, inventory);
+    }
+
+    private static void renderAmountRow(Inventory inventory, Player player, BuyProduct product,
+                                        PurchaseUnit unit, String path, List<Integer> fallbackPresets,
+                                        List<Integer> fallbackSlots, int fallbackCustomSlot,
+                                        Material fallbackMaterial) {
+        DailySellShop plugin = DailySellShop.getInstance();
+        if (!plugin.getBuyShopManager().supportsUnit(product, unit)) {
+            return;
+        }
+        int max = plugin.getBuyShopManager().getMaxSelection(product, unit);
+        List<Integer> presets = plugin.getShopConfig().getIntegerList(path + ".presets");
+        if (presets.isEmpty()) {
+            presets = fallbackPresets;
+        }
+        List<Integer> slots = itemSlots(path + ".slots", fallbackSlots);
+        for (int index = 0; index < Math.min(presets.size(), slots.size()); index++) {
+            int count = presets.get(index);
+            if (count <= 0 || count > max) {
+                continue;
+            }
+            Map<String, String> values = placeholders(player, product, unit, count);
+            ItemStack preset = configuredButton(path + ".preset-button", fallbackMaterial,
+                    "&a购买 {count} {unit}",
+                    List.of("&7物品数量: &f{amount} 个", "&7总价: &f${total}", "", "&e点击选择"),
+                    player, ACTION_AMOUNT, values);
+            setString(preset, "buy_product", product.key());
+            setString(preset, "buy_unit", unit.id());
+            setInt(preset, "buy_count", count);
+            setIfValid(inventory, preset, slots.get(index));
+        }
+
+        ItemStack custom = configuredButton(path + ".custom-button", Material.WRITABLE_BOOK,
+                "&b自定义{unit}数", List.of("&7范围: 1 - {max} {unit}",
+                        "&7输入期间移动超过 {distance} 格将取消"), player, ACTION_CUSTOM,
+                Map.of("{max}", String.valueOf(max), "{unit}", unit.displayName(),
+                        "{distance}", formatNumber(plugin.getShopConfig().getDouble(
+                                "settings.custom-input-cancel-distance", 2.0))));
+        setString(custom, "buy_product", product.key());
+        setString(custom, "buy_unit", unit.id());
+        setIfValid(inventory, custom, plugin.getShopConfig().getInt(path + ".custom-slot", fallbackCustomSlot));
     }
 
     private static void openBedrockHome(Player player) {
@@ -382,37 +414,31 @@ public final class BuyShopGui {
 
     private static void openBedrockAmounts(Player player, BuyProduct product) {
         DailySellShop plugin = DailySellShop.getInstance();
-        int max = plugin.getBuyShopManager().getMaxAmount(product);
         SimpleForm.Builder builder = SimpleForm.builder()
                 .title(strip(product.displayName()))
                 .content("单价: $" + BuyShopManager.formatMoney(product.price()) + "\n余额: $"
                         + plugin.getPurchaseManager().formatBalance(player));
-        List<Integer> amounts = plugin.getShopConfig().getIntegerList("menus.amount.presets");
-        if (amounts.isEmpty()) {
-            amounts = List.of(1, 5, 10, 20, 30, 40, 50, 64);
-        }
-        List<Integer> mapping = new ArrayList<>();
-        for (int amount : amounts) {
-            if (amount > 0 && amount <= max) {
-                BigDecimal total = BuyShopManager.money(product.price().multiply(BigDecimal.valueOf(amount)));
-                builder.button("购买 " + amount + " 个\n$" + BuyShopManager.formatMoney(total));
-                mapping.add(amount);
-            }
-        }
-        builder.button("自定义数量");
-        mapping.add(-1);
+        List<String> mapping = new ArrayList<>();
+        appendBedrockAmountRow(builder, mapping, product, PurchaseUnit.ITEM,
+                "menus.amount.rows.item", List.of(1, 5, 10, 20, 30, 64));
+        appendBedrockAmountRow(builder, mapping, product, PurchaseUnit.STACK,
+                "menus.amount.rows.stack", List.of(1, 3, 5, 10, 20, 30));
+        appendBedrockAmountRow(builder, mapping, product, PurchaseUnit.BOX,
+                "menus.amount.rows.box", List.of(1, 2, 3, 4, 5, 10));
         builder.button("返回商品列表");
-        mapping.add(-2);
+        mapping.add("back");
         builder.validResultHandler(response -> runSync(() -> {
             int index = response.clickedButtonId();
             if (index < 0 || index >= mapping.size()) {
                 return;
             }
-            int amount = mapping.get(index);
-            if (amount > 0) {
-                openBedrockConfirmation(player, product, amount);
-            } else if (amount == -1) {
-                plugin.getPurchaseManager().startCustomInput(player, product.key(), true);
+            String[] action = mapping.get(index).split(":", 3);
+            if (action[0].equals("preset")) {
+                openBedrockConfirmation(player, product, PurchaseUnit.fromId(action[1]),
+                        Integer.parseInt(action[2]));
+            } else if (action[0].equals("custom")) {
+                plugin.getPurchaseManager().startCustomInput(player, product.key(),
+                        PurchaseUnit.fromId(action[1]), true);
             } else {
                 openCategory(player, product.category(), 0);
             }
@@ -420,14 +446,40 @@ public final class BuyShopGui {
         sendForm(player, builder.build());
     }
 
-    public static void openBedrockCustomInput(Player player, BuyProduct product, boolean retry) {
+    private static void appendBedrockAmountRow(SimpleForm.Builder builder, List<String> mapping,
+                                                BuyProduct product, PurchaseUnit unit, String path,
+                                                List<Integer> fallbackPresets) {
         DailySellShop plugin = DailySellShop.getInstance();
-        int max = plugin.getBuyShopManager().getMaxAmount(product);
+        if (!plugin.getBuyShopManager().supportsUnit(product, unit)) {
+            return;
+        }
+        int max = plugin.getBuyShopManager().getMaxSelection(product, unit);
+        List<Integer> presets = plugin.getShopConfig().getIntegerList(path + ".presets");
+        if (presets.isEmpty()) {
+            presets = fallbackPresets;
+        }
+        for (int count : presets) {
+            if (count <= 0 || count > max) {
+                continue;
+            }
+            int amount = unit.itemAmount(product, count);
+            BigDecimal total = BuyShopManager.money(product.price().multiply(BigDecimal.valueOf(amount)));
+            builder.button("购买 " + count + " " + unit.displayName() + "（" + amount + " 个）\n$"
+                    + BuyShopManager.formatMoney(total));
+            mapping.add("preset:" + unit.id() + ":" + count);
+        }
+        builder.button("自定义" + unit.displayName() + "数");
+        mapping.add("custom:" + unit.id());
+    }
+
+    public static void openBedrockCustomInput(Player player, BuyProduct product, PurchaseUnit unit, boolean retry) {
+        DailySellShop plugin = DailySellShop.getInstance();
+        int max = plugin.getBuyShopManager().getMaxSelection(product, unit);
         CustomForm.Builder builder = CustomForm.builder()
-                .title("自定义购买数量")
+                .title("自定义购买" + unit.displayName() + "数")
                 .label((retry ? "上次输入无效，请重试一次。\n" : "")
                         + strip(product.displayName()) + " | 单价 $" + BuyShopManager.formatMoney(product.price()))
-                .input("数量（1 - " + max + "）", "请输入正整数", "1");
+                .input(unit.displayName() + "数（1 - " + max + "）", "请输入正整数", "1");
         builder.validResultHandler(response -> runSync(() ->
                 plugin.getPurchaseManager().handleCustomInput(player, response.asInput(1))));
         builder.closedOrInvalidResultHandler(() -> runSync(() ->
@@ -435,20 +487,22 @@ public final class BuyShopGui {
         sendForm(player, builder.build());
     }
 
-    private static void openBedrockConfirmation(Player player, BuyProduct product, int amount) {
+    private static void openBedrockConfirmation(Player player, BuyProduct product, PurchaseUnit unit, int count) {
         DailySellShop plugin = DailySellShop.getInstance();
+        int amount = unit.itemAmount(product, count);
         BigDecimal total = BuyShopManager.money(product.price().multiply(BigDecimal.valueOf(amount)));
-        int slots = plugin.getPurchaseManager().requiredSlots(product, amount);
+        int slots = plugin.getPurchaseManager().requiredSlots(product, unit, count);
         ModalForm.Builder builder = ModalForm.builder()
                 .title("确认购买")
-                .content(strip(product.displayName()) + "\n数量: " + amount + "\n总价: $"
+                .content(strip(product.displayName()) + "\n数量: " + count + " " + unit.displayName()
+                        + "（" + amount + " 个）\n总价: $"
                         + BuyShopManager.formatMoney(total) + "\n预计占用: " + slots + " 个背包格\n余额: $"
                         + plugin.getPurchaseManager().formatBalance(player))
                 .button1("确认购买")
                 .button2("返回");
         builder.validResultHandler(response -> runSync(() -> {
             if (response.clickedFirst()) {
-                plugin.getPurchaseManager().purchase(player, product.key(), amount);
+                plugin.getPurchaseManager().purchase(player, product.key(), unit, count);
             } else {
                 openBedrockAmounts(player, product);
             }
@@ -574,10 +628,18 @@ public final class BuyShopGui {
     }
 
     private static Map<String, String> placeholders(Player player, BuyProduct product, int amount) {
+        return placeholders(player, product, PurchaseUnit.ITEM, amount);
+    }
+
+    private static Map<String, String> placeholders(Player player, BuyProduct product,
+                                                    PurchaseUnit unit, int count) {
         DailySellShop plugin = DailySellShop.getInstance();
         Map<String, String> values = new HashMap<>();
         values.put("{player}", player.getName());
         values.put("{balance}", plugin.getPurchaseManager().formatBalance(player));
+        values.put("{count}", String.valueOf(count));
+        values.put("{unit}", unit.displayName());
+        int amount = product == null || count <= 0 ? 0 : unit.itemAmount(product, count);
         values.put("{amount}", String.valueOf(amount));
         if (product != null) {
             BigDecimal total = BuyShopManager.money(product.price().multiply(BigDecimal.valueOf(amount)));
@@ -585,8 +647,8 @@ public final class BuyShopGui {
             values.put("{material}", product.key());
             values.put("{price}", BuyShopManager.formatMoney(product.price()));
             values.put("{total}", BuyShopManager.formatMoney(total));
-            values.put("{slots}", String.valueOf(plugin.getPurchaseManager().requiredSlots(product, amount)));
-            values.put("{capacity}", String.valueOf(plugin.getPurchaseManager().calculateCapacity(player, product)));
+            values.put("{slots}", String.valueOf(plugin.getPurchaseManager().requiredSlots(product, unit, count)));
+            values.put("{capacity}", String.valueOf(plugin.getPurchaseManager().calculateCapacity(player, product, unit)));
         }
         return values;
     }

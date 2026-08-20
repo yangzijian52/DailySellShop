@@ -7,6 +7,7 @@ import org.bukkit.inventory.ItemStack;
 
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.time.DateTimeException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -26,26 +27,30 @@ public class ShopManager {
     private double limitMultiplier = 1.0;
     private int lastDayOfYear = -1;
     private int lastHourOfDay = -1;
+    private ZoneId timezone = ZoneId.of("Asia/Shanghai");
+    private String configuredRefreshMode = "DAILY";
 
     public ShopManager(DailySellShop plugin) {
         this.plugin = plugin;
-
-        ZonedDateTime now = getNow();
-        lastDayOfYear = now.getDayOfYear();
-        lastHourOfDay = now.getHour();
 
         forceUpdate();
         Bukkit.getScheduler().runTaskTimer(plugin, this::checkTimeReset, 20L, 400L);
     }
 
     private ZonedDateTime getNow() {
-        return ZonedDateTime.now(ZoneId.of(plugin.getSellConfig().getString("timezone", "Asia/Shanghai")));
+        return ZonedDateTime.now(timezone);
     }
 
     public void forceUpdate() {
-        String mode = plugin.getSellConfig().getString("refresh-mode", "DAILY").toUpperCase();
+        reloadTimezone();
+        reloadRefreshMode();
+        ZonedDateTime now = getNow();
+        lastDayOfYear = now.getDayOfYear();
+        lastHourOfDay = now.getHour();
+
+        String mode = refreshMode();
         if (mode.equals("HOURLY")) {
-            limitMultiplier = plugin.getSellConfig().getDouble("hourly-settings.multiplier", 0.5);
+            limitMultiplier = hourlyMultiplier();
         } else {
             limitMultiplier = 1.0;
         }
@@ -58,7 +63,7 @@ public class ShopManager {
         int currentDay = now.getDayOfYear();
         int currentHour = now.getHour();
 
-        String mode = plugin.getSellConfig().getString("refresh-mode", "DAILY").toUpperCase();
+        String mode = refreshMode();
         boolean shouldReset = false;
 
         if (mode.equals("DAILY")) {
@@ -70,7 +75,7 @@ public class ShopManager {
         } else if (mode.equals("HOURLY")) {
             if (currentHour != lastHourOfDay) {
                 plugin.getLogger().info("[小时模式] 已到整点，开始刷新商店。");
-                limitMultiplier = plugin.getSellConfig().getDouble("hourly-settings.multiplier", 0.5);
+                limitMultiplier = hourlyMultiplier();
                 shouldReset = true;
             }
         }
@@ -93,7 +98,7 @@ public class ShopManager {
             ConfigurationSection section = plugin.getSellConfig().getConfigurationSection("items");
             if (section != null) {
                 List<String> allKeys = new ArrayList<>(section.getKeys(false));
-                int amount = plugin.getSellConfig().getInt("random-rotation.amount", 10);
+                int amount = Math.max(0, plugin.getSellConfig().getInt("random-rotation.amount", 10));
                 Collections.shuffle(allKeys);
                 activeItems.addAll(allKeys.subList(0, Math.min(amount, allKeys.size())));
             }
@@ -184,7 +189,7 @@ public class ShopManager {
     }
 
     public String getShopTitle() {
-        String mode = plugin.getSellConfig().getString("refresh-mode", "DAILY").toUpperCase();
+        String mode = refreshMode();
         if (mode.equals("HOURLY")) {
             return DailySellShop.colorize(plugin.getSellConfig().getString("menu.title-hourly",
                     plugin.getSellConfig().getString("messages.title-hourly", "限时收购")));
@@ -236,6 +241,39 @@ public class ShopManager {
                 .replace("{player}", playerName)
                 .replace("%player%", playerName)
                 .replace("%player_name%", playerName)
-                .replace("{mode}", plugin.getSellConfig().getString("refresh-mode", "DAILY").toUpperCase(Locale.ROOT));
+                .replace("{mode}", refreshMode());
+    }
+
+    private void reloadTimezone() {
+        String configured = plugin.getSellConfig().getString("timezone", "Asia/Shanghai");
+        try {
+            timezone = ZoneId.of(configured == null ? "Asia/Shanghai" : configured);
+        } catch (DateTimeException exception) {
+            timezone = ZoneId.of("Asia/Shanghai");
+            plugin.getLogger().warning("无效时区 '" + configured + "'，已回退为 Asia/Shanghai。");
+        }
+    }
+
+    private String refreshMode() {
+        return configuredRefreshMode;
+    }
+
+    private void reloadRefreshMode() {
+        String configured = plugin.getSellConfig().getString("refresh-mode", "DAILY");
+        String normalized = configured == null ? "DAILY" : configured.toUpperCase(Locale.ROOT);
+        if (!normalized.equals("DAILY") && !normalized.equals("HOURLY")) {
+            plugin.getLogger().warning("无效刷新模式 '" + configured + "'，已回退为 DAILY。");
+            normalized = "DAILY";
+        }
+        configuredRefreshMode = normalized;
+    }
+
+    private double hourlyMultiplier() {
+        double value = plugin.getSellConfig().getDouble("hourly-settings.multiplier", 0.5);
+        if (!Double.isFinite(value) || value <= 0.0) {
+            plugin.getLogger().warning("hourly-settings.multiplier 必须是正数，已回退为 0.5。");
+            return 0.5;
+        }
+        return value;
     }
 }

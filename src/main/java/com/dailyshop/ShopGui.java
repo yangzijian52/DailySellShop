@@ -157,7 +157,11 @@ public class ShopGui {
             }
         }));
 
-        FloodgateApi.getInstance().sendForm(player.getUniqueId(), builder.build());
+        try {
+            FloodgateApi.getInstance().sendForm(player.getUniqueId(), builder.build());
+        } catch (RuntimeException exception) {
+            plugin.getLogger().warning("无法向基岩版玩家发送收购表单: " + exception.getMessage());
+        }
     }
 
     private static ItemStack createButtonItem(DailySellShop plugin, Player player, ShopManager manager, MenuButton button) {
