@@ -1,15 +1,15 @@
 # DailySellShop
 
-面向 Paper 26.2 的 Java/基岩双端双向商店插件。
+面向 Paper 26.3 的 Java/基岩双端双向商店插件。
 
 - `/ds`：每日或每小时轮换的玩家物品收购商店
 - `/dss`：按原版创造模式分类的长期购买商店
 - Java 玩家使用箱子 GUI
 - Geyser/Floodgate 基岩玩家使用功能对应的表单
 
-当前版本：`2.1.0`
+当前版本：`2.1.1`
 
-验证状态：2.0.0 已在 Paper 26.2 服务器完成插件加载、Java 菜单、收购与购买交易流程实测；2.1.0 已通过干净构建、配置解析和产物检查，新增的按组/按盒流程发布后仍建议在正式服更新前于测试服复核。
+验证状态：2.0.0 已于 Paper 26.2 完成历史功能验收；2.1.1 已完成 Paper 26.3 干净构建、单实例启动/重启和四服并联回归，新增的按组/按盒流程仍需真人验收。
 
 ## 功能
 
@@ -39,7 +39,7 @@
 
 | 组件 | 要求 |
 | --- | --- |
-| 服务端 | Paper `26.2` |
+| 服务端 | Paper `26.3` |
 | Java | `25+` |
 | 经济 | Vault + 任意 Vault 兼容经济插件 |
 | 基岩支持 | Geyser + Floodgate（可选） |
@@ -50,7 +50,7 @@ Vault 或经济插件不可用时，插件仍会启用且购买菜单可以浏�
 
 1. 安装 Vault 和一个 Vault 兼容经济插件。
 2. 如需基岩版表单，安装 Geyser 与 Floodgate。
-3. 将 `DailySellShop-2.1.0.jar` 放入服务端 `plugins` 目录。
+3. 将 `DailySellShop-2.1.1.jar` 放入服务端 `plugins` 目录。
 4. 启动服务器。插件首次启动会生成 `SellShopconfig.yml` 和 `shopconfig.yml`。
 5. 修改配置后执行 `/dss reload` 或 `/ds reload`。
 
@@ -59,7 +59,7 @@ Vault 或经济插件不可用时，插件仍会启用且购买菜单可以浏�
 ### 从 2.0.0 升级
 
 1. 停止服务器并备份 `plugins/DailySellShop`。
-2. 替换为 2.1.0 JAR。
+2. 替换为 2.1.1 JAR。
 3. 将新版 `shopconfig.yml` 中的 `settings.custom-stack-max`、`settings.custom-box-max`、`spawn-egg-defaults.max-stacks`、`spawn-egg-defaults.max-boxes` 和完整的 `menus.amount` 节点同步到现有配置。
 4. 启动服务器并测试按个、按组、按盒各一次；潜影盒商品自身不会显示盒装购买选项。
 
@@ -67,7 +67,7 @@ Vault 或经济插件不可用时，插件仍会启用且购买菜单可以浏�
 
 升级前先停止服务器，并备份 `plugins/DailySellShop`。
 
-1. 用 2.1.0 JAR 替换旧插件。
+1. 用 2.1.1 JAR 替换旧插件。
 2. 将原 `config.yml` 的自定义菜单和刷新设置迁移到 `SellShopconfig.yml`。
 3. 同步发行包中的新增商品、价格、药水和附魔书节点。
 4. 根据服务器需求调整新的 `shopconfig.yml`。
@@ -153,7 +153,7 @@ mvn clean package
 构建产物：
 
 ```text
-target/DailySellShop-2.1.0.jar
+target/DailySellShop-2.1.1.jar
 ```
 
 Maven 只对 `plugin.yml` 执行版本变量替换；玩家配置不会经过资源过滤，因此 `${price}` 等菜单占位符会保持原样。

@@ -1,5 +1,5 @@
 # ==========================================
-# DailySellShop 玩家购买商店配置 (Paper 26.2)
+# DailySellShop 玩家购买商店配置 (Paper 26.3)
 # /dss 使用本文件；/ds 收购系统使用 SellShopconfig.yml。
 # 修改后执行 /dss reload 或 /ds reload 重载，两条命令都会重载两份配置。
 # 重载会取消所有正在等待自定义数量输入的交易，不会覆盖本文件。
